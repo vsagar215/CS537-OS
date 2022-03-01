@@ -4,6 +4,7 @@
 #include <string.h>
 
 void batchMode();
+void parseInput(char *cmd); //TODO: Figure out actual return type
 void runAlias(char *cmd);
 
 /*
@@ -20,43 +21,55 @@ char* prompt="mysh> \0";
 
 int main(int argc, char* argv[]) {
 
+    //TODO: Handle batch mode
     if(argc == 2)
         batchMode();
 
     //else run interactive mode
-    char *s = malloc(512);
-    //char *eof = malloc(4);
+    char *cmd = malloc(512);
 
-    //TODO: Handle breaking when user presses ctrl+d
+    //TODO: Handle exiting when user presses ctrl+d
     while(1) {
 
         /* prompt user to enter & immediately exit if exit typed */
         write(1, prompt, sizeof(prompt));
-        fgets(s, 512, stdin);
-        //eof = fgets(s, 512, stdin);
+        fgets(cmd, 512, stdin);
 
         //write(1, s, sizeof(s));
-        if(!strncmp(s, "exit", 4))
+        //TODO: does the the prompt have to equal exit exactly?
+        if(!strncmp(cmd, "exit", 4))
             break;
 
         /* run appropriate program based on input */
-        if(!strncmp(s, "alias", 4))
-            runAlias(s);
-
-
+        if(!strncmp(cmd, "alias", 4))
+            runAlias(cmd);
     }
-
-
-    free(s);
-    //free(eof);
+    free(cmd);
+    return 0;
 }
 
 void batchMode() {
     write(5, "batch", 5);
 }
 
+void parseInput(char *cmd) {
+    //char *t = strtok(cmd, " ");
+    //printf("%s", t);
+    //fflush(stdout);
+}
+
 void runAlias(char *cmd) {
 
+    /*If the user only types alias*/
+    //must compare with newline as it is read in by fgets(...)
+    //TODO: Handle this
+    if(!strcmp(cmd, "alias\n")){
+        write(1, "cool", sizeof("cool"));
+        return;
+    }
+
+
+    parseInput(cmd);
 
     return;
 }
