@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 
 void batchMode();
 
@@ -12,15 +13,16 @@ int main(int argc, char* argv[]) {
         batchMode();
 
     //else run interactive mode
-    //char* y = "hi";
-    //int x = write(1, "int", sizeof(y));
-
     char *s = malloc(512);
     while(1) {
-       write(1, prompt, sizeof(prompt));
-       fgets(s, 512, stdin);
-       //printf("%s", s);
-       break;
+
+        write(1, prompt, sizeof(prompt));
+        fgets(s, 512, stdin);
+
+        //write(1, s, sizeof(s));
+        if(!strncmp(s, "exit", 4))
+            break;
+
     }
 
 
