@@ -53,9 +53,23 @@ void batchMode() {
 }
 
 void parseInput(char *cmd) {
-    //char *t = strtok(cmd, " ");
-    //printf("%s", t);
-    //fflush(stdout);
+    //write(1, "parsing...\n", sizeof("parsing...\n"));
+
+    //tokenize cmd
+    //TODO: maybe duplicate the cmd to preserve it
+    char *tokens[256];
+    int currToken = 0;
+
+
+    //tokens[0] = strtok(cmd, "%s");
+    //write(1, tokens[0], sizeof(tokens[0]));
+    //Pretty sure the seg fault is coming from here…will have not be fancy:(
+    while((tokens[currToken] = strtok(cmd, " ")))
+        currToken++;
+
+    //for(int i = 0; i < currToken; i++)
+        //write(1, &tokens[i], sizeof(tokens[i]));
+
 }
 
 void runAlias(char *cmd) {
@@ -67,7 +81,6 @@ void runAlias(char *cmd) {
         write(1, "cool", sizeof("cool"));
         return;
     }
-
 
     parseInput(cmd);
 
