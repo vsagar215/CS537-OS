@@ -4,7 +4,7 @@
 #include <string.h>
 
 void batchMode();
-void parseInput(char *cmd); //TODO: Figure out actual return type
+int parseInput(char *tokens[256], char *cmd); //returns number of tokens
 void runAlias(char *cmd);
 
 /*
@@ -52,24 +52,25 @@ void batchMode() {
     write(5, "batch", 5);
 }
 
-void parseInput(char *cmd) {
+int parseInput(char *tokens[256], char *cmd) {
     //write(1, "parsing...\n", sizeof("parsing...\n"));
 
     //tokenize cmd
     //TODO: maybe duplicate the cmd to preserve it
-    char *tokens[256];
+
+    //char *tokens[256];
+    char *token = strtok(cmd, " ");
     int currToken = 0;
 
-
-    //tokens[0] = strtok(cmd, "%s");
-    //write(1, tokens[0], sizeof(tokens[0]));
-    //Pretty sure the seg fault is coming from here…will have not be fancy:(
-    while((tokens[currToken] = strtok(cmd, " ")))
+    do{
+        tokens[currToken] = token;
+        //printf("%s\n", tokens[currToken]);
+        fflush(stdout);
         currToken++;
+        token = strtok(NULL, " "); //manuals specify this must be null
+    } while(token != NULL);
 
-    //for(int i = 0; i < currToken; i++)
-        //write(1, &tokens[i], sizeof(tokens[i]));
-
+    return currToken;
 }
 
 void runAlias(char *cmd) {
@@ -82,7 +83,13 @@ void runAlias(char *cmd) {
         return;
     }
 
-    parseInput(cmd);
+    char *tokens[256];
+    int numTokens = parseInput(tokens, cmd);
+
+    for(int i = 0; i < numTokens; i++){
+        printf("%s\n", tokens[i]);
+        fflush(stdout);
+    }
 
     return;
 }
