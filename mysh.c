@@ -96,8 +96,9 @@ struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *cmd) {
     /* build the value of the alias */
     char *aliasVal = "\0", *curr=NULL; //,*alias = tokens[1]; // the alias to add/replace will always be index 1
     for(int i = 2; i < numTokens; i++) {
-        curr = realloc(curr, sizeof(aliasVal)+sizeof(tokens[i])+1); //potential issues for memory leak here
-        strcat(strcat(curr, tokens[i]), " "); //append the current arg with a " " at the end
+        curr = realloc(curr, sizeof(aliasVal)+sizeof(tokens[i])+1); //potential issues for memory leak here, curr can be null
+        if(i < numTokens-1) strcat(strcat(curr, tokens[i]), " "); //append the current arg with a " " at the end
+        else strcat(curr, tokens[i]);
         aliasVal = curr;
     }
 
