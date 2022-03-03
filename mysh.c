@@ -66,7 +66,6 @@ int parseInput(char *tokens[256], char *cmd) {
     int currToken = 0;
     do{
         tokens[currToken] = token;
-        fflush(stdout);
         currToken++;
         token = strtok(NULL, " "); //manuals specify this must be null
     } while(token != NULL);
@@ -113,7 +112,7 @@ struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *cmd) {
     }
 
     if(!strcmp(currentNode->key, tokens[1]))
-        currentNode->value = aliasVal;
+        currentNode->value = strdup(aliasVal);
     else {
         struct aliasLinkedList *newNode = malloc(sizeof(struct aliasLinkedList));
         newNode->key   = strdup(tokens[1]);
