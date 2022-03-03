@@ -3,10 +3,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-void batchMode();
-int parseInput(char *tokens[256], char *cmd); //returns number of tokens
-void runAlias(char *cmd);
-
 /*
 * Linked list/dictionary implementation of aliases
 * The key is the shortcut while value is the actual command
@@ -16,12 +12,20 @@ struct aliasLinkedList {
     char* value;
     struct aliasLinkedList *next; //if there's no other alias then this is null
 };
-
 char* prompt="mysh> \0";
+
+void batchMode();
+int parseInput(char *tokens[256], char *cmd); //returns number of tokens
+struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *cmd);
 
 int main(int argc, char* argv[]) {
 
     //TODO: Handle batch mode
+
+    struct aliasLinkedList *head = malloc(sizeof(struct aliasLinkedList));
+    head->key = head->value = "\0";
+    head->next = NULL;
+
     if(argc == 2)
         batchMode();
 
@@ -42,8 +46,11 @@ int main(int argc, char* argv[]) {
 
         /* run appropriate program based on input */
         if(!strncmp(cmd, "alias", 4))
-            runAlias(cmd);
+            head = runAlias(head, cmd);
     }
+
+    //TODO: Free the linked list??
+
     free(cmd);
     return 0;
 }
@@ -53,43 +60,67 @@ void batchMode() {
 }
 
 int parseInput(char *tokens[256], char *cmd) {
-    //write(1, "parsing...\n", sizeof("parsing...\n"));
-
     //tokenize cmd
     //TODO: maybe duplicate the cmd to preserve it
-
-    //char *tokens[256];
     char *token = strtok(cmd, " ");
     int currToken = 0;
-
     do{
         tokens[currToken] = token;
-        //printf("%s\n", tokens[currToken]);
         fflush(stdout);
         currToken++;
         token = strtok(NULL, " "); //manuals specify this must be null
     } while(token != NULL);
-
     return currToken;
 }
 
-void runAlias(char *cmd) {
-
+struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *cmd) {
     /*If the user only types alias*/
     //must compare with newline as it is read in by fgets(...)
     //TODO: Handle this
+    struct aliasLinkedList *currentNode = head;
     if(!strcmp(cmd, "alias\n")){
-        write(1, "cool", sizeof("cool"));
-        return;
+        while(currentNode->next != NULL) {
+            printf("%s %s", currentNode->key, currentNode->value);
+            fflush(stdout);
+            currentNode = currentNode->next;
+        }
+        return head;
     }
 
     char *tokens[256];
+    tokens[1] = NULL;
     int numTokens = parseInput(tokens, cmd);
-
-    for(int i = 0; i < numTokens; i++){
-        printf("%s\n", tokens[i]);
-        fflush(stdout);
+    if(tokens[1] == NULL) {
+        write(1, "alias parsing error", sizeof("alias parsing error"));
+        return head;
+    }
+    /* build the value of the alias */
+    char *aliasVal = "\0", *curr=NULL; //,*alias = tokens[1]; // the alias to add/replace will always be index 1
+    for(int i = 2; i < numTokens; i++) {
+        curr = realloc(curr, sizeof(aliasVal)+sizeof(tokens[i])+1); //potential issues for memory leak here
+        strcat(strcat(curr, tokens[i]), " "); //append the current arg with a " " at the end
+        aliasVal = curr;
     }
 
-    return;
+    /*
+    * Iterate through nodes until
+    * 1) Find a node with the current alias
+    * 2) Reach the end
+    */
+    while(currentNode->next != NULL ) {
+        if(!strcmp(currentNode->key, tokens[1])) break;
+        currentNode = currentNode->next;
+    }
+
+    if(!strcmp(currentNode->key, tokens[1]))
+        currentNode->value = aliasVal;
+    else {
+        struct aliasLinkedList *newNode = malloc(sizeof(struct aliasLinkedList));
+        newNode->key   = strdup(tokens[1]);
+        newNode->value = strdup(aliasVal);
+        newNode->next  = head;
+        head = newNode;
+    }
+    free(curr);
+    return head;
 }
