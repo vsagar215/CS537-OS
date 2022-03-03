@@ -98,18 +98,21 @@ struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *cmd) {
     if(numTokens == 2) {
         while(currentNode->next != NULL) {
             if(!strncmp(currentNode->key, tokens[1], sizeof(*(currentNode->key)))) {
-                write(1, currentNode->value, sizeof(currentNode->value));
+                printf("%s %s", currentNode->key, currentNode->value);
+                fflush(stdout);
+                //write(1, currentNode->value, sizeof(currentNode->value));
                 return head;
             }
             currentNode = currentNode->next;
         }
+        return head;
     }
 
     /* build the value of the alias */
     char *aliasVal = "\0", *curr=NULL; //,*alias = tokens[1]; // the alias to add/replace will always be index 1
     for(int i = 2; i < numTokens; i++) {
         curr = realloc(curr, sizeof(aliasVal)+sizeof(tokens[i])+1); //potential issues for memory leak here, curr can be null
-        if(i < numTokens-1) strcat(strcat(curr, tokens[i]), " "); //append the current arg with a " " at the end
+        if(i < numTokens-1) strcat(strcat(curr, tokens[i]), " ");   //append the current arg with a " " at the end
         else strcat(curr, tokens[i]);
         aliasVal = curr;
     }
