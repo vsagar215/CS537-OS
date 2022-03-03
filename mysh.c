@@ -93,6 +93,18 @@ struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *cmd) {
         write(1, "alias parsing error", sizeof("alias parsing error"));
         return head;
     }
+
+    /* if command alias val -> numTokens == 2, so then only print that one alias */
+    if(numTokens == 2) {
+        while(currentNode->next != NULL) {
+            if(!strncmp(currentNode->key, tokens[1], sizeof(*(currentNode->key)))) {
+                write(1, currentNode->value, sizeof(currentNode->value));
+                return head;
+            }
+            currentNode = currentNode->next;
+        }
+    }
+
     /* build the value of the alias */
     char *aliasVal = "\0", *curr=NULL; //,*alias = tokens[1]; // the alias to add/replace will always be index 1
     for(int i = 2; i < numTokens; i++) {
