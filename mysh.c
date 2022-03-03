@@ -16,7 +16,8 @@ char* prompt="mysh> \0";
 
 void batchMode();
 int parseInput(char *tokens[256], char *cmd); //returns number of tokens
-struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *cmd);
+struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[256], int numTokens); //TODO: change cmd to *cmd[]
+struct aliasLinkedList *runUnalias(struct aliasLinkedList *head, char *cmd[]);
 
 int main(int argc, char* argv[]) {
 
@@ -39,14 +40,19 @@ int main(int argc, char* argv[]) {
         write(1, prompt, sizeof(prompt));
         fgets(cmd, 512, stdin);
 
-        //write(1, s, sizeof(s));
+        char *tokens[256];
+        int numTokens = parseInput(tokens, cmd);
+
         //TODO: does the the prompt have to equal exit exactly?
         if(!strncmp(cmd, "exit", 4))
             break;
 
         /* run appropriate program based on input */
         if(!strncmp(cmd, "alias", 4))
-            head = runAlias(head, cmd);
+            head = runAlias(head, tokens, numTokens);
+        else if(!strncmp(cmd, "unalias", 7)) {
+
+        }
     }
 
     //TODO: Free the linked list??
@@ -72,12 +78,12 @@ int parseInput(char *tokens[256], char *cmd) {
     return currToken;
 }
 
-struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *cmd) {
+struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *tokens[256], int numTokens) {
     /*If the user only types alias*/
     //must compare with newline as it is read in by fgets(...)
     //TODO: Handle this
     struct aliasLinkedList *currentNode = head;
-    if(!strcmp(cmd, "alias\n")){
+    if(!strcmp(tokens[0], "alias\n")){
         while(currentNode->next != NULL) {
             printf("%s %s", currentNode->key, currentNode->value);
             fflush(stdout);
@@ -86,15 +92,7 @@ struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *cmd) {
         return head;
     }
 
-    char *tokens[256];
-    tokens[1] = NULL;
-    int numTokens = parseInput(tokens, cmd);
-    if(tokens[1] == NULL) {
-        write(1, "alias parsing error", sizeof("alias parsing error"));
-        return head;
-    }
-
-    /* if command alias val -> numTokens == 2, so then only print that one alias */
+    /* if of form command alias <alias-name> then numTokens == 2, so then only print that one alias */
     if(numTokens == 2) {
         while(currentNode->next != NULL) {
             if(!strncmp(currentNode->key, tokens[1], sizeof(*(currentNode->key)))) {
