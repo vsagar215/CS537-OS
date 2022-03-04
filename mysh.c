@@ -120,6 +120,15 @@ struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *tokens[256]
     * 1) Find a node with the current alias
     * 2) Reach the end
     */
+
+    if(head == NULL) {
+        head = malloc(sizeof(struct aliasLinkedList));
+        head->key   = strdup(tokens[1]);
+        head->value = strdup(aliasVal);
+        head->next  = NULL;
+        return head;
+    }
+
     while(currentNode->next != NULL ) {
         if(!strcmp(currentNode->key, tokens[1])) break;
         currentNode = currentNode->next;
@@ -139,14 +148,14 @@ struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *tokens[256]
 }
 
 struct aliasLinkedList *runUnalias(struct aliasLinkedList *head, char *cmd[], int numTokens) {
-    struct aliasLinkedList *currentNode = head, *previous = NULL;
+    struct aliasLinkedList *currentNode = head, *previous = head;
     if(numTokens > 2) {
         write(1, "unalias: Incorrect number of arguments.\n", sizeof("unalias: Incorrect number of arguments.\n"));
         return head;
     }
 
     while(currentNode->next != NULL) {
-        if(!strcmp(currentNode->key, cmd[1])) {
+        if(!strncmp(currentNode->key, cmd[1], sizeof(*(currentNode->key)))) {
             /*found the thing to unalias*/
             previous->next = currentNode->next;
             free(currentNode);
