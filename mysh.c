@@ -17,7 +17,7 @@ char* prompt="mysh> \0";
 void batchMode();
 int parseInput(char *tokens[256], char *cmd); //returns number of tokens
 struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[256], int numTokens); //TODO: change cmd to *cmd[]
-struct aliasLinkedList *runUnalias(struct aliasLinkedList *head, char *cmd[]);
+struct aliasLinkedList *runUnalias(struct aliasLinkedList *head, char *cmd[], int numTokens);
 
 int main(int argc, char* argv[]) {
 
@@ -51,7 +51,7 @@ int main(int argc, char* argv[]) {
         if(!strncmp(cmd, "alias", 4))
             head = runAlias(head, tokens, numTokens);
         else if(!strncmp(cmd, "unalias", 7)) {
-
+            head = runUnalias(head, tokens, numTokens);
         }
     }
 
@@ -135,5 +135,25 @@ struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *tokens[256]
         head = newNode;
     }
     free(curr);
+    return head;
+}
+
+struct aliasLinkedList *runUnalias(struct aliasLinkedList *head, char *cmd[], int numTokens) {
+    struct aliasLinkedList *currentNode = head, *previous = NULL;
+    if(numTokens > 2) {
+        write(1, "unalias: Incorrect number of arguments.\n", sizeof("unalias: Incorrect number of arguments.\n"));
+        return head;
+    }
+
+    while(currentNode->next != NULL) {
+        if(!strcmp(currentNode->key, cmd[1])) {
+            /*found the thing to unalias*/
+            previous->next = currentNode->next;
+            free(currentNode);
+            return head;
+        }
+        previous    = currentNode;
+        currentNode = currentNode->next;
+    }
     return head;
 }
