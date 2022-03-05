@@ -1,20 +1,22 @@
+// Should solve alias issue
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-struct aliasLL
+struct aliasLinkedList
 {
 	char *key;
 	char *value;
-	struct aliasLL *next;
+	struct aliasLinkedList *next;
 };
 
 // Adding from top
-void push(struct aliasLL **head, char *key, char *value)
+void push(struct aliasLinkedList **head, char *key, char *value)
 {
 	// Making and alloc mem for newNode
-	struct aliasLL *newNode = NULL;
-	newNode = (struct aliasLL *)malloc(sizeof(struct aliasLL));
+	struct aliasLinkedList *newNode = NULL;
+	newNode = (struct aliasLinkedList *)malloc(sizeof(struct aliasLinkedList));
 
 	if (newNode == NULL)
 	{
@@ -33,9 +35,9 @@ void push(struct aliasLL **head, char *key, char *value)
 }
 
 // Returning position of element to delete
-int findPos(struct aliasLL *head, char* key)
+int findPos(struct aliasLinkedList *head, char* key)
 {
-	struct aliasLL *curr = NULL;
+	struct aliasLinkedList *curr = NULL;
 	curr = head;
 	int counter = 0;
 
@@ -54,7 +56,7 @@ int findPos(struct aliasLL *head, char* key)
 }
 
 // Deleting from a position
-int delAtPos(struct aliasLL *head, int position)
+int delAtPos(struct aliasLinkedList *head, int position)
 {
 	// Checking if list is empty
 	if (head == NULL)
@@ -63,7 +65,7 @@ int delAtPos(struct aliasLL *head, int position)
 		return 0;
 	}
 
-	struct aliasLL *curr, *prev;
+	struct aliasLinkedList *curr, *prev;
 	int i; // index for both pointers
 	// Assigning both pointers to head
 	curr = head;
@@ -97,7 +99,7 @@ int delAtPos(struct aliasLL *head, int position)
 }
 
 // Deleting a node based on value
-void delMid(struct aliasLL *head, char *passedVal)
+void delMid(struct aliasLinkedList *head, char *passedVal)
 {
 	int pos = findPos(head, passedVal);
 	if (pos == 0)
@@ -117,10 +119,10 @@ void delMid(struct aliasLL *head, char *passedVal)
 }
 
 // Prints the LinkedList
-void printLL(struct aliasLL *head)
+void printLL(struct aliasLinkedList *head)
 {
 	// Noding used for iterating
-	struct aliasLL *curr = NULL;
+	struct aliasLinkedList *curr = NULL;
 	curr = head;
 
 	// Going until the end of the list
@@ -136,8 +138,9 @@ void printLL(struct aliasLL *head)
 
 int main()
 {
-	struct aliasLL *head = NULL;
+	struct aliasLinkedList *head = NULL;
 
+	// Adding to the LinkedList
 	push(&head, "key1", "foo");
 	push(&head, "key2", "bar");
 	push(&head, "key3", "foobar");
