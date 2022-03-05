@@ -19,47 +19,7 @@ int parseInput(char *tokens[256], char *cmd); //returns number of tokens
 struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[256], int numTokens); //TODO: change cmd to *cmd[]
 struct aliasLinkedList *runUnalias(struct aliasLinkedList *head, char *cmd[], int numTokens);
 
-int main(int argc, char* argv[]) {
 
-    //TODO: Handle batch mode
-
-    struct aliasLinkedList *head = malloc(sizeof(struct aliasLinkedList));
-    head->key = head->value = "\0";
-    head->next = NULL;
-
-    if(argc == 2)
-        batchMode();
-
-    //else run interactive mode
-    char *cmd = malloc(512);
-
-    //TODO: Handle exiting when user presses ctrl+d
-    while(1) {
-
-        /* prompt user to enter & immediately exit if exit typed */
-        write(1, prompt, sizeof(prompt));
-        fgets(cmd, 512, stdin);
-
-        char *tokens[256];
-        int numTokens = parseInput(tokens, cmd);
-
-        //TODO: does the the prompt have to equal exit exactly?
-        if(!strncmp(cmd, "exit", 4))
-            break;
-
-        /* run appropriate program based on input */
-        if(!strncmp(cmd, "alias", 4))
-            head = runAlias(head, tokens, numTokens);
-        else if(!strncmp(cmd, "unalias", 7)) {
-            head = runUnalias(head, tokens, numTokens);
-        }
-    }
-
-    //TODO: Free the linked list??
-
-    free(cmd);
-    return 0;
-}
 
 void batchMode() {
     write(5, "batch", 5);
@@ -165,4 +125,46 @@ struct aliasLinkedList *runUnalias(struct aliasLinkedList *head, char *cmd[], in
         currentNode = currentNode->next;
     }
     return head;
+}
+
+int main(int argc, char* argv[]) {
+
+    //TODO: Handle batch mode
+
+    struct aliasLinkedList *head = malloc(sizeof(struct aliasLinkedList));
+    head->key = head->value = "\0";
+    head->next = NULL;
+
+    if(argc == 2)
+        batchMode();
+
+    //else run interactive mode
+    char *cmd = malloc(512);
+
+    //TODO: Handle exiting when user presses ctrl+d
+    while(1) {
+
+        /* prompt user to enter & immediately exit if exit typed */
+        write(1, prompt, sizeof(prompt));
+        fgets(cmd, 512, stdin);
+
+        char *tokens[256];
+        int numTokens = parseInput(tokens, cmd);
+
+        //TODO: does the the prompt have to equal exit exactly?
+        if(!strncmp(cmd, "exit", 4))
+            break;
+
+        /* run appropriate program based on input */
+        if(!strncmp(cmd, "alias", 4))
+            head = runAlias(head, tokens, numTokens);
+        else if(!strncmp(cmd, "unalias", 7)) {
+            head = runUnalias(head, tokens, numTokens);
+        }
+    }
+
+    //TODO: Free the linked list??
+
+    free(cmd);
+    return 0;
 }
