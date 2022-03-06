@@ -18,6 +18,12 @@ void batchMode();
 int parseInput(char *tokens[256], char *cmd); //returns number of tokens
 struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[256], int numTokens); //TODO: change cmd to *cmd[]
 struct aliasLinkedList *runUnalias(struct aliasLinkedList *head, char *cmd[], int numTokens);
+void addNode(struct aliasLinkedList **head, char *key, char *value);
+void removeNode(struct aliasLinkedList **head, char *key);
+int delAtPos(struct aliasLinkedList *head, int position);
+void delMid(struct aliasLinkedList *head, char *passedVal);
+int findPos(struct aliasLinkedList *head, char* key);
+
 
 int main(int argc, char* argv[]) {
 
@@ -48,10 +54,12 @@ int main(int argc, char* argv[]) {
             break;
 
         /* run appropriate program based on input */
-        if(!strncmp(cmd, "alias", 4))
+        if(!strncmp(cmd, "alias", 4)) {
             head = runAlias(head, tokens, numTokens);
+            //addNode(&head, tokens[1]);
+        }
         else if(!strncmp(cmd, "unalias", 7)) {
-            head = runUnalias(head, tokens, numTokens);
+            runUnalias(head, tokens, numTokens);
         }
     }
 
@@ -120,49 +128,173 @@ struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *tokens[256]
     * 1) Find a node with the current alias
     * 2) Reach the end
     */
-
-    if(head == NULL) {
-        head = malloc(sizeof(struct aliasLinkedList));
-        head->key   = strdup(tokens[1]);
-        head->value = strdup(aliasVal);
-        head->next  = NULL;
-        return head;
-    }
-
-    while(currentNode->next != NULL ) {
-        if(!strcmp(currentNode->key, tokens[1])) break;
-        currentNode = currentNode->next;
-    }
-
-    if(!strcmp(currentNode->key, tokens[1]))
-        currentNode->value = strdup(aliasVal);
-    else {
-        struct aliasLinkedList *newNode = malloc(sizeof(struct aliasLinkedList));
-        newNode->key   = strdup(tokens[1]);
-        newNode->value = strdup(aliasVal);
-        newNode->next  = head;
-        head = newNode;
-    }
+    addNode(&head, tokens[1], aliasVal);
     free(curr);
     return head;
 }
 
 struct aliasLinkedList *runUnalias(struct aliasLinkedList *head, char *cmd[], int numTokens) {
-    struct aliasLinkedList *currentNode = head, *previous = head;
     if(numTokens > 2) {
         write(1, "unalias: Incorrect number of arguments.\n", sizeof("unalias: Incorrect number of arguments.\n"));
         return head;
     }
+    //removeNode(&head, cmd[1]);
 
-    while(currentNode->next != NULL) {
-        if(!strncmp(currentNode->key, cmd[1], sizeof(*(currentNode->key)))) {
-            /*found the thing to unalias*/
-            previous->next = currentNode->next;
-            free(currentNode);
-            return head;
-        }
-        previous    = currentNode;
+    delMid(head, cmd[1]);
+
+    return head;
+}
+
+
+void addNode(struct aliasLinkedList **head, char *key, char *value) {
+    struct aliasLinkedList *currentNode = *head;
+    if(head == NULL) {
+        head = malloc(sizeof(struct aliasLinkedList));
+        (*head)->key   = strdup(key);
+        (*head)->value = strdup(value);
+        (*head)->next  = NULL;
+    }
+
+    while(currentNode->next != NULL ) {
+        if(!strcmp(currentNode->key, key)) break;
         currentNode = currentNode->next;
     }
-    return head;
+
+    if(!strcmp(currentNode->key, key))
+        currentNode->value = strdup(value);
+    else {
+        struct aliasLinkedList *newNode = malloc(sizeof(struct aliasLinkedList));
+        newNode->key   = strdup(key);
+        newNode->value = strdup(value);
+        newNode->next  = *head;
+        *head = newNode;
+    }
+}
+
+
+void removeNode(struct aliasLinkedList **head, char *key) {
+    if(head == NULL || *head == NULL || key == NULL)
+        return;
+
+    struct aliasLinkedList *curr = *head, *prev = NULL;
+    /*Edge case: removing head*/
+    if(curr !=NULL && !strncmp(curr->key, key, sizeof(*(curr->key))) ) {
+        *head = curr->next;
+        free(curr);
+        return;
+    }
+
+    while(curr != NULL && !strncmp(curr->key, key, sizeof(*(curr->key)))) {
+        prev = curr;
+        curr = curr->next;
+    }
+
+    if(curr == NULL)
+        return;
+    prev->next = curr->next;
+
+
+    //while(curr != NULL && curr->next != NULL) {
+        //if(!strcmp(curr->next->key, key)) {
+            //printf("curr: %s %s \n", curr->key, curr->value);
+            //printf("to remove: %s %s \n\n", curr->next->key, curr->next->value);
+
+            //curr->next = curr->next->next;
+            //return;
+        //}
+        //curr = curr->next;
+    //}
+    free(curr);
+}
+
+
+int delAtPos(struct aliasLinkedList *head, int position)
+{
+	// Checking if list is empty
+	if (head == NULL)
+	{
+		printf("ERROR: List empty\n");
+		return 0;
+	}
+
+	struct aliasLinkedList *curr, *prev;
+	int i; // index for both pointers
+	// Assigning both pointers to head
+	curr = head;
+	prev = head;
+
+	// Iterating till the position of iterest
+	for (i = 2; i < position + 1; ++i)
+	{
+		// Iterating untill one before node to delete
+		prev = curr;
+		// Iterating to the node to delete
+		curr = curr->next;
+
+		// Reaching end of list
+		if (curr == NULL)
+		{
+			break;
+		}
+	}
+
+    //if(curr !=NULL && !strncmp(curr->key, key, sizeof(*(curr->key))) ) {
+        //*head = curr->next;
+        //free(curr);
+        //return 1;
+    //}
+	// Deleting from the front
+	if (curr == head) {
+		head = curr->next;
+        free(curr);
+        return 1;
+    }
+
+	prev->next = curr->next;
+	curr->next = NULL;
+
+	// Freeing the nth node
+	free(curr);
+	return 1;
+}
+
+// Deleting a node based on value
+void delMid(struct aliasLinkedList *head, char *passedVal)
+{
+	int pos = findPos(head, passedVal);
+	if (pos == 0)
+	{
+		printf("ERROR: Node to be deleted not in List\n");
+		return;
+	}
+
+	if (1 == delAtPos(head, pos))
+	{
+		printf("Deleted successfully\n");
+	}
+	else
+	{
+		printf("Position invalid\n");
+	}
+}
+
+// Returning position of element to delete
+int findPos(struct aliasLinkedList *head, char* key)
+{
+	struct aliasLinkedList *curr = NULL;
+	curr = head;
+	int counter = 0;
+
+	while (curr != NULL)
+	{
+		counter++;
+		if (strncmp(curr->key, key, sizeof(*(curr->key))) == 0)
+		{
+			return counter;
+		}
+
+		// If not element, iter till end
+		curr = curr->next;
+	}
+	return 0;
 }
