@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
 
 /*
  * Linked list/dictionary implementation of aliases
@@ -21,6 +22,7 @@ char *prompt = "mysh> \0";
 void batchMode(char *fileName);
 void readCmd(FILE *stream);
 void execCmd(char *cmd);
+char **tokenizeCmd(char *cmd);
 int parseInput(char *tokens[TOKEN_NUMBER], char *cmd);                                                       // returns number of tokens
 struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[TOKEN_NUMBER], int numTokens);
 void runUnalias(struct aliasLinkedList **head, char *cmd[], int numTokens);
@@ -43,9 +45,9 @@ int main(int argc, char *argv[])
     }
 
     // Creating head of Alias Linked List
-    struct aliasLinkedList *head = malloc(sizeof(struct aliasLinkedList));
+    struct aliasLinkedList *head = malloc(sizeof(struct aliasLinkedList)), *findAlias = NULL;
     // Initializing struct to default vals
-    head->key = head->value = "\0";
+    head->key = head->value = "dummy\0";
     head->next = NULL;
 
     if (argc == 2)
@@ -69,11 +71,25 @@ int main(int argc, char *argv[])
             exit(0);
 
         /* run appropriate program based on input */
+        //check if cmd is an alias
+        findAlias = head;
+        while(findAlias != NULL) {
+            if(!strncmp(findAlias->key, tokens[0], sizeof(*(findAlias->key)) )) {
+                /*Build the actual command*/
+                execCmd(findAlias->value);
+            }
+            findAlias = findAlias->next;
+        }
+
         // Feature: Alias and Unalias
         if(!strncmp(cmd, "alias", 4))
             head = runAlias(head, tokens, numTokens);
         else if(!strncmp(cmd, "unalias", 7))
             runUnalias(&head, tokens, numTokens);
+        else
+            execCmd(cmd);
+        //else if(!strcmp(tokens[0], "/bin/ls\n") || !strncmp(tokens[0],"/bin/ls", sizeof("/bin/ls")))
+            //execCmd(cmd);
     }
 
     //Free the linked list
@@ -120,10 +136,8 @@ void readCmd(FILE *stream)
     while (fgets(s, BUFFER_SIZE, stream) != NULL)
     {
         if (strcmp(s, "exit") == 0)
-        {
             exit(0);
-        }
-        printf("%s", s);
+        //printf("%s", s);
         execCmd(s);
     }
     // End of file reached
@@ -132,16 +146,98 @@ void readCmd(FILE *stream)
 
 void execCmd(char *cmd)
 {
-    printf("Executing command:\t%s", cmd);
-    fflush(stdout);
-    // TODO: Execute commands
+    // populating executCmd with cmd
+    char **executCmd;
+    executCmd = tokenizeCmd(cmd);
+
+    // // Printing full command
+    // char *tok = executCmd[0];
+    // int i = 0;
+    // while (tok != NULL)
+    // {
+    //     printf("%s\t", tok);
+    //     tok = executCmd[++i];
+    // }
+
+    int PID = fork();
+    int status;
+    // Checking if fork fails
+    if (PID == -1)
+    {
+        exit(1);
+    }
+    // Fork succeeds:
+    // 1) Child Process
+    if (PID == 0)
+    {
+        // This is the child process
+        // exec does not return if it succeeds
+        // returns (and sets errno) -1 if fails
+        int execRV = execv(executCmd[0], executCmd);
+        if (execRV == -1)
+        {
+            printf("%s: Command not found.\n", executCmd[0]);
+            fflush(stdout);
+            // child process terminates itself
+            _exit(1);
+        }
+    }
+    // 2) Parents Process
+    else
+    {
+        // This is the parent process; Waits for the child to finish
+        waitpid(PID, &status, 0);
+        free(executCmd);
+    }
 }
+
+// TODO: Use parseInput to compute duplicate?
+char **tokenizeCmd(char *cmd)
+{
+    // terminating in \n
+    cmd[strcspn(cmd, "\n")] = 0;
+    int tokenCount = 0;
+    // int otherC = 0; // Counts mismatch -- look into this
+    // char *tokens[TOKEN_NUMBER];
+    // otherC = parseInput(tokens, cmd);
+    // printf("%p\n", tokens);
+    char *dup = strdup(cmd);        // creating duplicate string
+    char *token = strtok(cmd, " "); // splitting on spaces
+
+    // counting tokens
+    while (token != NULL)
+    {
+        token = strtok(NULL, " ");
+        tokenCount += 1;
+    }
+
+    char *tokenDup = strtok(dup, " ");
+    char **myargv = malloc(sizeof(char *) * tokenCount + 1);
+    tokenCount = 0;
+
+    // populate myargv array
+    while (tokenDup != NULL)
+    {
+        myargv[tokenCount] = strdup(tokenDup); // TODO: free all pointers of argv
+        tokenDup = strtok(NULL, " ");
+        tokenCount += 1;
+    }
+
+    // append null terminator to end of myargv
+    myargv[tokenCount] = NULL;
+    free(dup);
+
+    // fprintf(stdout, "real: %d\tother: %d", tokenCount, otherC);
+    return myargv;
+}
+
 
 int parseInput(char *tokens[TOKEN_NUMBER], char *cmd)
 {
     // tokenize cmd
     // TODO: maybe duplicate the cmd to preserve it
-    char *token = strtok(cmd, " ");
+    char *tempCmd = strdup(cmd);
+    char *token = strtok(tempCmd, " ");
     int currToken = 0;
     do
     {
@@ -149,19 +245,14 @@ int parseInput(char *tokens[TOKEN_NUMBER], char *cmd)
         currToken++;
         token = strtok(NULL, " "); // manuals specify this must be null
     } while (token != NULL);
+    free(tempCmd);
     return currToken;
 }
 
 struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *tokens[256], int numTokens) {
-    /*If the user only types alias*/
-    if(!strncmp(tokens[1], "alias\n", sizeof("alias")) ||
-        !strncmp(tokens[1], "unalias\n", sizeof("unalias")) ||
-        !strncmp(tokens[1], "exit\n", sizeof("exit"))
-        ){
-        write(2, "alias: Too dangerous to alias that.\n", sizeof("alias: Too dangerous to alias that.\n"));
-        return head;
-    }
 
+    //printf("testing\n");
+    //fflush(stdout);
     struct aliasLinkedList *currentNode = head;
     if(!strcmp(tokens[0], "alias\n")){
         while(currentNode->next != NULL) {
@@ -171,6 +262,16 @@ struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *tokens[256]
         }
         return head;
     }
+
+    /*If the user only types alias*/
+    if(!strncmp(tokens[1], "alias\n", sizeof("alias")) ||
+        !strncmp(tokens[1], "unalias\n", sizeof("unalias")) ||
+        !strncmp(tokens[1], "exit\n", sizeof("exit"))
+        ){
+        write(2, "alias: Too dangerous to alias that.\n", sizeof("alias: Too dangerous to alias that.\n"));
+        return head;
+    }
+
 
     /* if of form command alias <alias-name> then numTokens == 2, so then only print that one alias */
     if(numTokens == 2) {
@@ -187,7 +288,6 @@ struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *tokens[256]
 
     /* build the value of the alias */
     char *aliasVal = "\0", *temp = malloc(sizeof(aliasVal));
-
     if(temp == NULL){
         write(2, "Error not enough memory\n", sizeof("Error not enough memory\n"));
         return head;
@@ -243,7 +343,6 @@ void addNode(struct aliasLinkedList **head, char *key, char *value) {
         *head = newNode;
     }
 }
-
 
 void runUnalias(struct aliasLinkedList **headRef, char *cmd[], int numTokens) {
 
