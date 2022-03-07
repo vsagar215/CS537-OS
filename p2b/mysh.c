@@ -24,6 +24,7 @@ void readCmd(FILE *stream);
 void execCmd(char *cmd);
 char **tokenizeCmd(char *cmd);
 int parseInput(char *tokens[TOKEN_NUMBER], char *cmd);                                                       // returns number of tokens
+int checkRedirection(char *cmd);
 struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[TOKEN_NUMBER], int numTokens);
 void runUnalias(struct aliasLinkedList **head, char *cmd[], int numTokens);
 void addNode(struct aliasLinkedList **headRef, char *key, char *value);
@@ -168,18 +169,23 @@ void execCmd(char *cmd)
     }
     // Fork succeeds:
     // 1) Child Process
-    if (PID == 0)
+    if (PID != 0)
     {
         // This is the child process
         // exec does not return if it succeeds
         // returns (and sets errno) -1 if fails
-        int execRV = execv(executCmd[0], executCmd);
-        if (execRV == -1)
-        {
-            printf("%s: Command not found.\n", executCmd[0]);
-            fflush(stdout);
-            // child process terminates itself
-            _exit(1);
+
+        int isCmdRedirected = checkRedirection(cmd);
+
+        if(isCmdRedirected == 0){
+            int execRV = execv(executCmd[0], executCmd);
+            if (execRV == -1)
+            {
+                printf("%s: Command not found.\n", executCmd[0]);
+                fflush(stdout);
+                // child process terminates itself
+                _exit(1);
+            }
         }
     }
     // 2) Parents Process
@@ -247,6 +253,25 @@ int parseInput(char *tokens[TOKEN_NUMBER], char *cmd)
     } while (token != NULL);
     free(tempCmd);
     return currToken;
+}
+
+int checkRedirection(char *cmd) {
+    char *pch = strchr(str,'>');
+    int numRedirChar = 0;
+    //int pos = pch-str+1; //honestly not sure what this does, found it in the manuals and it works…
+    while (pch!=NULL) {
+        printf ("found at %d\n",pch-str+1);
+        pch=strchr(pch+1,'>');
+    }
+
+    if(numRedirChar == 0 || numRedirChar > 1) {
+        write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+        return 0;
+    }
+
+
+
+    return pos; //ptr to pos of ">"
 }
 
 struct aliasLinkedList* runAlias(struct aliasLinkedList *head, char *tokens[256], int numTokens) {
