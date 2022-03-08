@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <ctype.h>
 
 /*
  * Linked list/dictionary implementation of aliases
@@ -33,6 +34,7 @@ void runUnalias(struct aliasLinkedList **head, char *cmd[], int numTokens);
 void addNode(struct aliasLinkedList **headRef, char *key, char *value);
 void removeNode(struct aliasLinkedList **headRef, char *key);
 int checkRedir(char *cmd, char *redirPtr);
+char *getFn2(char *cmd);
 
 int main(int argc, char *argv[]) {
     // buffer for write
@@ -58,12 +60,14 @@ int main(int argc, char *argv[]) {
     // else run interactive mode
     char *cmd = malloc(BUFFER_SIZE);
 
+    printf("mysh> ");
+    fflush(stdout);
     // TODO: Handle exiting when user presses ctrl+d
-    while (1) {
+    while (fgets(cmd, BUFFER_SIZE, stdin)) {
         /* prompt user to enter & immediately exit if exit typed */
-        printf("mysh> ");
-        fflush(stdout);
-        fgets(cmd, BUFFER_SIZE, stdin);
+        // printf("mysh> ");
+        // fflush(stdout);
+        
 
         // TODO: Trim Whitespaces
         char *tokens[TOKEN_NUMBER];
@@ -80,6 +84,7 @@ int main(int argc, char *argv[]) {
             if (!strncmp(findAlias->key, tokens[0], sizeof(*(findAlias->key)))) {
                 /*Build the actual command*/
                 execCmd(findAlias->value);
+                goto PROMPT;
             }
             findAlias = findAlias->next;
         }
@@ -91,6 +96,10 @@ int main(int argc, char *argv[]) {
             runUnalias(&head, tokens, numTokens);
         else
             execCmd(cmd);
+
+
+        PROMPT: printf("mysh> ");
+        fflush(stdout);
     }
 
     // Free the linked list
@@ -141,13 +150,22 @@ void readCmd(FILE *stream) {
 
 void execCmd(char *cmd) {
     // populating executCmd with cmd
-
+    // printf("cmd: %s\n", cmd);
+    // fflush(stdout);
     char **executCmd;
     executCmd = tokenizeCmd(cmd);
+    // printf("executCmd[0]: %s\n", executCmd[0]);
+    // fflush(stdout);
     char *fileName = malloc(0);
     int toRedir = checkRedir(cmd, fileName);
-    if(toRedir == 0)
-        fileName = getFn(cmd);
+    // printf("toRedir: %d\n", toRedir);
+    // fflush(stdout);
+    if(toRedir == 0){
+        // fileName = getFn(cmd);
+        fileName = getFn2(cmd); // Function using new type of splitting
+        // printf("fileName: %s\n", fileName);
+        // fflush(stdout);
+    }
     if (toRedir < 0)
         return;
 
@@ -166,11 +184,19 @@ void execCmd(char *cmd) {
         if (toRedir == 0) {
             char *newCmd = strtok(strdup(cmd), ">"), *tokNewCmd[TOKEN_NUMBER];
             int numTok = parseInput(tokNewCmd, newCmd);
-            tokNewCmd[numTok] = NULL;
-            // printf("%s\n\n%s\n\n%s\n", tokNewCmd[0], tokNewCmd[1], tokNewCmd[2]);
+            // printf("newCmd: %s\nnumTok: %d\n", newCmd, numTok);
             // fflush(stdout);
+            tokNewCmd[numTok] = NULL;
             execRedir(fileName); //close stdout
-            execRV = execv(executCmd[0], tokNewCmd);
+            // printf("tokNewCmd[0]: %s\n", tokNewCmd[0]);
+            // fflush(stdout);
+            // int k = 0;
+            // while(tokNewCmd[k] != NULL){
+            //     printf("tokNewCmd: %s\n", tokNewCmd[k]);
+            //     fflush(stdout);
+            //     k++;
+            // }
+            execRV = execv(tokNewCmd[0], tokNewCmd);
         }
         else    execRV = execv(executCmd[0], executCmd);
 
@@ -272,12 +298,25 @@ int parseInput(char *tokens[TOKEN_NUMBER], char *cmd) {
     return currToken;
 }
 
+// Older version
 char *getFn(char *cmd) {
     char **tokCmd = tokenizeCmd(cmd);
     int i = 0;
     while (tokCmd[i] != NULL)
         ++i;
     char* redirPtr = strdup(tokCmd[i-1]); // the file to open
+    // printf("fileName: %s\n", redirPtr);
+    return redirPtr;
+}
+
+// New version
+char *getFn2(char *cmd) {
+    char **tokCmd = tokenizeRedir(cmd);
+    int i = 0;
+    while (tokCmd[i] != NULL)
+        ++i;
+    char* redirPtr = strdup(tokCmd[i-1]); // the file to open
+    // printf("fileName: %s\n", redirPtr);
     return redirPtr;
 }
 
@@ -327,14 +366,56 @@ int checkRedir(char *cmd, char *redirPtr){
     return 0;
 }
 
+// Performs in place white space trimming
+char *trimWhiteSpaces(char *s)
+{
+    // Second pointer for the end
+    char *ep;
+
+    // Trimming left side white space
+    while (isspace((unsigned char)*s)) //using isspace
+    {
+        s++;
+    }
+
+    // If string contains nothing but white spaces
+    if (*s == 0)
+    {
+        return s;
+    }
+
+    // Trimming right side white space
+    ep = s + strlen(s) - 1;
+    while (ep > s && isspace((unsigned char)*ep))
+    {
+        ep--;
+    }
+
+    // Writing '\0' to the end
+    ep[1] = '\0';
+
+    // Trimmed string
+    return s;
+}
+
 void execRedir(char *fileName) {
     // Closing stdout & Handling FileIO
-    int fptr = open(fileName, O_WRONLY | O_TRUNC | O_CREAT, 00700);
-    dup2(fptr, STDOUT_FILENO);
+    
+    char *cpyStr = trimWhiteSpaces(fileName);
+    // printf("strncmp: %d\n", strcmp(cpyStr, "tests-out/tmp.txt"));
+    // fflush(stdout);
+    // char *dupFn = strdup(fileName);
+    // int fptr = open(dupFn, O_WRONLY | O_TRUNC | O_CREAT, 00700);
+    int fptr = open(cpyStr, O_WRONLY | O_TRUNC | O_CREAT, 00700);
     if(fptr == -1) {
+        // printf("Don't Print!\n");
+        // fflush(stdout);
         fprintf(stderr, "Cannot write to file %s.\n", fileName);
         fflush(stderr);
     }
+    dup2(fptr, STDOUT_FILENO);
+    // printf("fileName: %s\n fptr: %d\n", fileName, fptr);
+    // fflush(stdout);
 }
 
 struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[256], int numTokens) {
