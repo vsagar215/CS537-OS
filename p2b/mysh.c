@@ -167,6 +167,8 @@ void execCmd(char *cmd) {
             //free(newCmd);
             execRedir(fileName); //close stdout
             execRV = execv(executCmd[0], tokNewCmd);
+            //char *test[4] = {"/bin/echo", "hello", "world", NULL};
+            //execRV = execv(executCmd[0], test);
         }
         else    execRV = execv(executCmd[0], executCmd);
 
@@ -177,7 +179,6 @@ void execCmd(char *cmd) {
             _exit(1);
         }
     }
-    // 2) Parents Process
     else {
         // This is the parent process; Waits for the child to finish
         waitpid(PID, &status, 0);
@@ -226,7 +227,7 @@ int parseInput(char *tokens[TOKEN_NUMBER], char *cmd) {
     char *token = strtok(tempCmd, " ");
     int currToken = 0;
     do {
-        tokens[currToken] = token;
+        tokens[currToken] = strdup(token);
         currToken++;
         token = strtok(NULL, " "); // manuals specify this must be null
     } while (token != NULL);
@@ -254,9 +255,7 @@ int checkRedirection(char *cmd, char *redirPtr) {
     int redirCount = 0;
     char last = cmd[strlen(cmd) - 1], first = cmd[0];
     if (last == '>' || first == '>') {
-        fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
-		// write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+        write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
         return -1;
     }
 
@@ -264,13 +263,10 @@ int checkRedirection(char *cmd, char *redirPtr) {
     while (tokCmd[i] != NULL)
         ++i;
 
-	// // Checking if ">" is the last char (what about last == '>'?)
-    // if (!strcmp(tokCmd[i - 1], ">")) {
-	// 	fprintf(stderr, "Redirection misformatted.\n");
-	// 	fflush(stderr);
-    //     // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
-    //     return -1;
-    // }
+    if (!strcmp(tokCmd[i - 1], ">")) {
+        write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+        return -1;
+    }
 
     redirPtr = strdup(tokCmd[i-1]); // the file to open
     for (int j = 0; j < i; j++) {
@@ -278,35 +274,15 @@ int checkRedirection(char *cmd, char *redirPtr) {
             redirCount++;
     }
     if (redirCount > 1) {
-		fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
-        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+        write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
         return -1;
     }
-
-	// TEST 13: SPLIT ABOUT > NOT SPACES!!
-	// printf("5th last:\t%s\n", tokCmd[i - 4]);
-	// printf("4th last:\t%s\n", tokCmd[i - 3]);
-	// printf("3rd last:\t%s\n", tokCmd[i - 2]);
-	// printf("2nd last:\t%s\n", tokCmd[i - 1]);
-	// printf("last:\t%s\n", tokCmd[i]);
-	// printf("DEBUG1: Return 0\n");
-
-	// Checks to see if more than 1 token after ">"
-	if (strcmp(tokCmd[i - 2], ">") != 0) {
-		// printf("2nd last:\t%s\n", tokCmd[i - 2]);
-		fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
-        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
-        return -1;
-    }
-
     return 0;
 }
 
 void execRedir(char *fileName) {
     // Closing stdout & Handling FileIO
-    int fptr = open(fileName, O_WRONLY | O_TRUNC);
+    int fptr = open(fileName, O_WRONLY | O_TRUNC | O_CREAT, 00700);
     dup2(fptr, STDOUT_FILENO);
     if(fptr == -1) {
         fprintf(stderr, "Cannot write to file %s.\n", fileName);
