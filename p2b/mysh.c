@@ -284,19 +284,23 @@ int checkRedirection(char *cmd, char *redirPtr) {
         return -1;
     }
 
-	// Checks to see if more than 1 token after ">"
-	if (strcmp(tokCmd[i - 2], ">") != 0) {
-		// printf("2nd last:\t%s\n", tokCmd[i - 1]);
-		fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
-        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
-        return -1;
-    }
+	// TEST 13: SPLIT ABOUT > NOT SPACES!!
+	// printf("5th last:\t%s\n", tokCmd[i - 4]);
 	// printf("4th last:\t%s\n", tokCmd[i - 3]);
 	// printf("3rd last:\t%s\n", tokCmd[i - 2]);
 	// printf("2nd last:\t%s\n", tokCmd[i - 1]);
 	// printf("last:\t%s\n", tokCmd[i]);
 	// printf("DEBUG1: Return 0\n");
+
+	// Checks to see if more than 1 token after ">"
+	if (strcmp(tokCmd[i - 2], ">") != 0) {
+		// printf("2nd last:\t%s\n", tokCmd[i - 2]);
+		fprintf(stderr, "Redirection misformatted.\n");
+		fflush(stderr);
+        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+        return -1;
+    }
+
     return 0;
 }
 
