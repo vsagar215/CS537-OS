@@ -254,7 +254,9 @@ int checkRedirection(char *cmd, char *redirPtr) {
     int redirCount = 0;
     char last = cmd[strlen(cmd) - 1], first = cmd[0];
     if (last == '>' || first == '>') {
-        write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+        fprintf(stderr, "Redirection misformatted.\n");
+		fflush(stderr);
+		// write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
         return -1;
     }
 
@@ -263,7 +265,9 @@ int checkRedirection(char *cmd, char *redirPtr) {
         ++i;
 
     if (!strcmp(tokCmd[i - 1], ">")) {
-        write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+		fprintf(stderr, "Redirection misformatted.\n");
+		fflush(stderr);
+        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
         return -1;
     }
 
@@ -273,7 +277,9 @@ int checkRedirection(char *cmd, char *redirPtr) {
             redirCount++;
     }
     if (redirCount > 1) {
-        write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+		fprintf(stderr, "Redirection misformatted.\n");
+		fflush(stderr);
+        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
         return -1;
     }
     return 0;
