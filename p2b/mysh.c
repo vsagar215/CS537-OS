@@ -26,7 +26,7 @@ void execCmd(char *cmd);
 char **tokenizeCmd(char *cmd);
 int parseInput(char *tokens[TOKEN_NUMBER], char *cmd); // returns number of tokens
 int checkRedirection(char *cmd, char *redirPtr);
-void execRedir(char **old, char **new, char *fileName);
+void execRedir(char *fileName);
 char *getFn(char *cmd);
 struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[TOKEN_NUMBER], int numTokens);
 void runUnalias(struct aliasLinkedList **head, char *cmd[], int numTokens);
@@ -138,6 +138,7 @@ void readCmd(FILE *stream) {
 }
 void execCmd(char *cmd) {
     // populating executCmd with cmd
+
     char **executCmd;
     executCmd = tokenizeCmd(cmd);
     char *fileName = malloc(0);
@@ -146,23 +147,7 @@ void execCmd(char *cmd) {
         fileName = getFn(cmd);
     if (toRedir < 0)
         return;
-    // Creating
-    int num;
 
-    while(strcmp(executCmd[num], ">") != 0){
-        num++;
-    }
-
-    //char **newCmd = malloc(sizeof(char *) * num +1);
-
-    char *buff = strtok(cmd, ">");
-
-    //printf("pointer: %p\n", newCmd);
-    printf("buff: %s\n", buff);
-    //while(buff != NULL){
-    //    newCmd[num] = strdup(buff)
-    //}
-    //
     int PID = fork();
     int status;
     // Checking if fork fails
@@ -170,20 +155,20 @@ void execCmd(char *cmd) {
         free(fileName);
         exit(1);
     }
-    // Fork succeeds:
-    // 1) Child Process
+    // Fork succeeds: enter 1) Child Process
     int execRV;
     if (PID == 0) {
-        // This is the child process
-        // exec does not return if it succeeds
+        // This is the child process exec does not return if it succeeds
         // returns (and sets errno) -1 if fails
         if (toRedir == 0) {
-            char **badExecutCmd = tokenizeCmd(cmd);
-            execRedir(badExecutCmd, executCmd, fileName);
-            char *xyz[] ={"/bin/ls",NULL};
-            execRV = execv(executCmd[0], xyz);
+            char *newCmd = strtok(strdup(cmd), ">"), *tokNewCmd[TOKEN_NUMBER];
+            int numTok = parseInput(tokNewCmd, newCmd);
+            tokNewCmd[numTok] = NULL;
+            //free(newCmd);
+            execRedir(fileName); //close stdout
+            execRV = execv(executCmd[0], tokNewCmd);
         }
-        else execRV = execv(executCmd[0], executCmd);
+        else    execRV = execv(executCmd[0], executCmd);
 
         if (execRV == -1) {
             printf("%s: Command not found.\n", executCmd[0]);
@@ -294,7 +279,7 @@ int checkRedirection(char *cmd, char *redirPtr) {
     return 0;
 }
 
-void execRedir(char **old, char **new, char *fileName) {
+void execRedir(char *fileName) {
     // Closing stdout & Handling FileIO
     int fptr = open(fileName, O_WRONLY | O_TRUNC);
     dup2(fptr, STDOUT_FILENO);
@@ -302,12 +287,6 @@ void execRedir(char **old, char **new, char *fileName) {
         fprintf(stderr, "Cannot write to file %s.\n", fileName);
         fflush(stderr);
     }
-
-    //int i = 0;
-    //while(!strcmp(old[i], ">")) {
-        //printf("i:%d %s\n", i, old[i]);
-        //i++;
-    //}
 }
 
 struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[256], int numTokens) {
