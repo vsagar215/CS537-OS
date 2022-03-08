@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <ctype.h>
 
 /*
  * Linked list/dictionary implementation of aliases
@@ -25,14 +26,15 @@ void readCmd(FILE *stream);
 void execCmd(char *cmd);
 char **tokenizeCmd(char *cmd);
 int parseInput(char *tokens[TOKEN_NUMBER], char *cmd); // returns number of tokens
-int checkRedirection(char *cmd, char *redirPtr);
 void execRedir(char *fileName);
+char **tokenizeRedir(char *cmd);
 char *getFn(char *cmd);
 struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[TOKEN_NUMBER], int numTokens);
 void runUnalias(struct aliasLinkedList **head, char *cmd[], int numTokens);
 void addNode(struct aliasLinkedList **headRef, char *key, char *value);
 void removeNode(struct aliasLinkedList **headRef, char *key);
-char **tokenizeRedir(char *cmd);
+int checkRedir(char *cmd, char *redirPtr);
+char *getFn2(char *cmd);
 
 int main(int argc, char *argv[]) {
     // buffer for write
@@ -53,18 +55,21 @@ int main(int argc, char *argv[]) {
     head->next = NULL;
 
     if (argc == 2)
-        batchMode(argv[1]);
+        batchMode(argv[1]); //TODO: Trim whitespaces
 
     // else run interactive mode
     char *cmd = malloc(BUFFER_SIZE);
 
+    printf("mysh> ");
+    fflush(stdout);
     // TODO: Handle exiting when user presses ctrl+d
-    while (1) {
+    while (fgets(cmd, BUFFER_SIZE, stdin)) {
         /* prompt user to enter & immediately exit if exit typed */
-        printf("mysh> ");
-        fflush(stdout);
-        fgets(cmd, BUFFER_SIZE, stdin);
+        // printf("mysh> ");
+        // fflush(stdout);
+        
 
+        // TODO: Trim Whitespaces
         char *tokens[TOKEN_NUMBER];
         int numTokens = parseInput(tokens, cmd);
 
@@ -79,6 +84,7 @@ int main(int argc, char *argv[]) {
             if (!strncmp(findAlias->key, tokens[0], sizeof(*(findAlias->key)))) {
                 /*Build the actual command*/
                 execCmd(findAlias->value);
+                goto PROMPT;
             }
             findAlias = findAlias->next;
         }
@@ -90,6 +96,10 @@ int main(int argc, char *argv[]) {
             runUnalias(&head, tokens, numTokens);
         else
             execCmd(cmd);
+
+
+        PROMPT: printf("mysh> ");
+        fflush(stdout);
     }
 
     // Free the linked list
@@ -140,13 +150,22 @@ void readCmd(FILE *stream) {
 
 void execCmd(char *cmd) {
     // populating executCmd with cmd
-
+    // printf("cmd: %s\n", cmd);
+    // fflush(stdout);
     char **executCmd;
     executCmd = tokenizeCmd(cmd);
+    // printf("executCmd[0]: %s\n", executCmd[0]);
+    // fflush(stdout);
     char *fileName = malloc(0);
-    int toRedir = checkRedirection(cmd, fileName);
-    if(toRedir == 0)
-        fileName = getFn(cmd);
+    int toRedir = checkRedir(cmd, fileName);
+    // printf("toRedir: %d\n", toRedir);
+    // fflush(stdout);
+    if(toRedir == 0){
+        // fileName = getFn(cmd);
+        fileName = getFn2(cmd); // Function using new type of splitting
+        // printf("fileName: %s\n", fileName);
+        // fflush(stdout);
+    }
     if (toRedir < 0)
         return;
 
@@ -165,24 +184,19 @@ void execCmd(char *cmd) {
         if (toRedir == 0) {
             char *newCmd = strtok(strdup(cmd), ">"), *tokNewCmd[TOKEN_NUMBER];
             int numTok = parseInput(tokNewCmd, newCmd);
-            // ---
-            // char *tempCmd = strdup(newCmd);
-            // char *token = strtok(tempCmd, " ");
-            // int currToken = 0;
-            // do {
-            // tokNewCmd[currToken] = token;
-            // currToken++;
-            // // printf("%s\n", token);
-            // token = strtok(NULL, " "); // manuals specify this must be null
-            // } while (token != NULL);
-            // free(tempCmd);
-            // ---
-            tokNewCmd[numTok] = NULL;
-            //free(newCmd);
-            // printf("%s\n\n%s\n\n%s\n", tokNewCmd[0], tokNewCmd[1], tokNewCmd[2]);
+            // printf("newCmd: %s\nnumTok: %d\n", newCmd, numTok);
             // fflush(stdout);
+            tokNewCmd[numTok] = NULL;
             execRedir(fileName); //close stdout
-            execRV = execv(executCmd[0], tokNewCmd);
+            // printf("tokNewCmd[0]: %s\n", tokNewCmd[0]);
+            // fflush(stdout);
+            // int k = 0;
+            // while(tokNewCmd[k] != NULL){
+            //     printf("tokNewCmd: %s\n", tokNewCmd[k]);
+            //     fflush(stdout);
+            //     k++;
+            // }
+            execRV = execv(tokNewCmd[0], tokNewCmd);
         }
         else    execRV = execv(executCmd[0], executCmd);
 
@@ -284,12 +298,25 @@ int parseInput(char *tokens[TOKEN_NUMBER], char *cmd) {
     return currToken;
 }
 
+// Older version
 char *getFn(char *cmd) {
     char **tokCmd = tokenizeCmd(cmd);
     int i = 0;
     while (tokCmd[i] != NULL)
         ++i;
     char* redirPtr = strdup(tokCmd[i-1]); // the file to open
+    // printf("fileName: %s\n", redirPtr);
+    return redirPtr;
+}
+
+// New version
+char *getFn2(char *cmd) {
+    char **tokCmd = tokenizeRedir(cmd);
+    int i = 0;
+    while (tokCmd[i] != NULL)
+        ++i;
+    char* redirPtr = strdup(tokCmd[i-1]); // the file to open
+    // printf("fileName: %s\n", redirPtr);
     return redirPtr;
 }
 
@@ -306,95 +333,89 @@ int checkRedir(char *cmd, char *redirPtr){
 		// write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
         return -1;
     }
-    // redirPtr = strdup(tokCmd[i-1]);
     // Split by >
-    // char **tokCmd = tokenizeRedir(cmd);
+    char **tokCmd = tokenizeRedir(cmd);
     // 3) Check multiple signs
-    // int num = 0
-    // while(tokCmd[num] != NULL){
-    //    k ++;
-    //}
-    // if(i > 2) return -1;
+    int num = 0;
+    while(tokCmd[num] != NULL){
+       num ++;
+    }
+    if(num > 2){
+        fprintf(stderr, "Redirection misformatted.\n");
+		fflush(stderr);
+        return -1;
+    } 
+    // Assigning filename
+    redirPtr = strdup(tokCmd[num - 1]);
     // Split by " "
-    // char **dstFile = tokenizeCmd(tokCmd[1]);
+    char **dstFile = tokenizeCmd(tokCmd[1]);
     // 4) Check multiple dst files
-    // k = 0;
-    // while(dstFile[num] != NULL){
-    //    k ++;
-    //}
-    // if(i > 2) return -1;
+    num = 0;
+    while(dstFile[num] != NULL){
+      num ++;
+    }
+    // printf("num (2nd time): %d\n", num);
+    // printf("1: %s,\n 2: %s,\n 3: %s\n", dstFile[0], dstFile[1], dstFile[2]);
+    if(num > 1){
+        // printf("DEBUG: entring if\n");
+        fprintf(stderr, "Redirection misformatted.\n");
+		fflush(stderr);
+        return -1;
+    }
+    // Terminating correctly
     return 0;
 }
 
-int checkRedirection(char *cmd, char *redirPtr) {
-    if (cmd == NULL)
-        return -1;
+// Performs in place white space trimming
+char *trimWhiteSpaces(char *s)
+{
+    // Second pointer for the end
+    char *ep;
 
-    if (strchr(cmd, '>') == NULL)
-        return 1;
-
-    char **tokCmd = tokenizeCmd(cmd);
-    int redirCount = 0;
-    char last = cmd[strlen(cmd) - 1], first = cmd[0];
-    if (last == '>' || first == '>') {
-        fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
-		// write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
-        return -1;
+    // Trimming left side white space
+    while (isspace((unsigned char)*s)) //using isspace
+    {
+        s++;
     }
 
-    int i = 0;
-    while (tokCmd[i] != NULL)
-        ++i;
-
-	// // Checking if ">" is the last char (what about last == '>'?)
-    // if (!strcmp(tokCmd[i - 1], ">")) {
-	// 	fprintf(stderr, "Redirection misformatted.\n");
-	// 	fflush(stderr);
-    //     // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
-    //     return -1;
-    // }
-
-    redirPtr = strdup(tokCmd[i-1]); // the file to open
-    for (int j = 0; j < i; j++) {
-        if (!strcmp(tokCmd[j], ">"))
-            redirCount++;
-    }
-    if (redirCount > 1) {
-		fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
-        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
-        return -1;
+    // If string contains nothing but white spaces
+    if (*s == 0)
+    {
+        return s;
     }
 
-	// TEST 13: SPLIT ABOUT > NOT SPACES!!
-	// printf("5th last:\t%s\n", tokCmd[i - 4]);
-	// printf("4th last:\t%s\n", tokCmd[i - 3]);
-	// printf("3rd last:\t%s\n", tokCmd[i - 2]);
-	// printf("2nd last:\t%s\n", tokCmd[i - 1]);
-	// printf("last:\t%s\n", tokCmd[i]);
-	// printf("DEBUG1: Return 0\n");
-
-	// Checks to see if more than 1 token after ">"
-	if (strcmp(tokCmd[i - 2], ">") != 0) {
-		// printf("2nd last:\t%s\n", tokCmd[i - 2]);
-		fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
-        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
-        return -1;
+    // Trimming right side white space
+    ep = s + strlen(s) - 1;
+    while (ep > s && isspace((unsigned char)*ep))
+    {
+        ep--;
     }
 
-    return 0;
+    // Writing '\0' to the end
+    ep[1] = '\0';
+
+    // Trimmed string
+    return s;
 }
 
 void execRedir(char *fileName) {
     // Closing stdout & Handling FileIO
-    int fptr = open(fileName, O_WRONLY | O_TRUNC | O_CREAT, 00700);
-    dup2(fptr, STDOUT_FILENO);
+    
+    char *cpyStr = trimWhiteSpaces(fileName);
+    // printf("strncmp: %d\n", strcmp(cpyStr, "tests-out/tmp.txt"));
+    // fflush(stdout);
+    // char *dupFn = strdup(fileName);
+    // int fptr = open(dupFn, O_WRONLY | O_TRUNC | O_CREAT, 00700);
+    int fptr = open(cpyStr, O_WRONLY | O_TRUNC | O_CREAT, 00700);
     if(fptr == -1) {
+        // printf("Don't Print!\n");
+        // fflush(stdout);
         fprintf(stderr, "Cannot write to file %s.\n", fileName);
         fflush(stderr);
     }
+    dup2(fptr, STDOUT_FILENO);
+    // printf("fileName: %s\n fptr: %d\n", fileName, fptr);
+    // fflush(stdout);
 }
 
 struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[256], int numTokens) {
