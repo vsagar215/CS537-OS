@@ -228,6 +228,9 @@ int parseInput(char *tokens[TOKEN_NUMBER], char *cmd) {
     int currToken = 0;
     do {
         tokens[currToken] = strdup(token);
+
+        //printf("i: %d \t token: %s \t parse tkn: %s\n", currToken, token, tokens[currToken]);
+        //fflush(stdout);
         currToken++;
         token = strtok(NULL, " "); // manuals specify this must be null
     } while (token != NULL);
