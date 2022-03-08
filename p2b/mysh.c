@@ -25,14 +25,14 @@ void readCmd(FILE *stream);
 void execCmd(char *cmd);
 char **tokenizeCmd(char *cmd);
 int parseInput(char *tokens[TOKEN_NUMBER], char *cmd); // returns number of tokens
-int checkRedirection(char *cmd, char *redirPtr);
 void execRedir(char *fileName);
+char **tokenizeRedir(char *cmd);
 char *getFn(char *cmd);
 struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[TOKEN_NUMBER], int numTokens);
 void runUnalias(struct aliasLinkedList **head, char *cmd[], int numTokens);
 void addNode(struct aliasLinkedList **headRef, char *key, char *value);
 void removeNode(struct aliasLinkedList **headRef, char *key);
-char **tokenizeRedir(char *cmd);
+int checkRedir(char *cmd, char *redirPtr);
 
 int main(int argc, char *argv[]) {
     // buffer for write
@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
     head->next = NULL;
 
     if (argc == 2)
-        batchMode(argv[1]);
+        batchMode(argv[1]); //TODO: Trim whitespaces
 
     // else run interactive mode
     char *cmd = malloc(BUFFER_SIZE);
@@ -65,6 +65,7 @@ int main(int argc, char *argv[]) {
         fflush(stdout);
         fgets(cmd, BUFFER_SIZE, stdin);
 
+        // TODO: Trim Whitespaces
         char *tokens[TOKEN_NUMBER];
         int numTokens = parseInput(tokens, cmd);
 
@@ -144,7 +145,7 @@ void execCmd(char *cmd) {
     char **executCmd;
     executCmd = tokenizeCmd(cmd);
     char *fileName = malloc(0);
-    int toRedir = checkRedirection(cmd, fileName);
+    int toRedir = checkRedir(cmd, fileName);
     if(toRedir == 0)
         fileName = getFn(cmd);
     if (toRedir < 0)
@@ -165,20 +166,7 @@ void execCmd(char *cmd) {
         if (toRedir == 0) {
             char *newCmd = strtok(strdup(cmd), ">"), *tokNewCmd[TOKEN_NUMBER];
             int numTok = parseInput(tokNewCmd, newCmd);
-            // ---
-            // char *tempCmd = strdup(newCmd);
-            // char *token = strtok(tempCmd, " ");
-            // int currToken = 0;
-            // do {
-            // tokNewCmd[currToken] = token;
-            // currToken++;
-            // // printf("%s\n", token);
-            // token = strtok(NULL, " "); // manuals specify this must be null
-            // } while (token != NULL);
-            // free(tempCmd);
-            // ---
             tokNewCmd[numTok] = NULL;
-            //free(newCmd);
             // printf("%s\n\n%s\n\n%s\n", tokNewCmd[0], tokNewCmd[1], tokNewCmd[2]);
             // fflush(stdout);
             execRedir(fileName); //close stdout
@@ -306,84 +294,36 @@ int checkRedir(char *cmd, char *redirPtr){
 		// write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
         return -1;
     }
-    // redirPtr = strdup(tokCmd[i-1]);
     // Split by >
-    // char **tokCmd = tokenizeRedir(cmd);
+    char **tokCmd = tokenizeRedir(cmd);
     // 3) Check multiple signs
-    // int num = 0
-    // while(tokCmd[num] != NULL){
-    //    k ++;
-    //}
-    // if(i > 2) return -1;
-    // Split by " "
-    // char **dstFile = tokenizeCmd(tokCmd[1]);
-    // 4) Check multiple dst files
-    // k = 0;
-    // while(dstFile[num] != NULL){
-    //    k ++;
-    //}
-    // if(i > 2) return -1;
-    return 0;
-}
-
-int checkRedirection(char *cmd, char *redirPtr) {
-    if (cmd == NULL)
-        return -1;
-
-    if (strchr(cmd, '>') == NULL)
-        return 1;
-
-    char **tokCmd = tokenizeCmd(cmd);
-    int redirCount = 0;
-    char last = cmd[strlen(cmd) - 1], first = cmd[0];
-    if (last == '>' || first == '>') {
+    int num = 0;
+    while(tokCmd[num] != NULL){
+       num ++;
+    }
+    if(num > 2){
         fprintf(stderr, "Redirection misformatted.\n");
 		fflush(stderr);
-		// write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
         return -1;
+    } 
+    // Assigning filename
+    redirPtr = strdup(tokCmd[num - 1]);
+    // Split by " "
+    char **dstFile = tokenizeCmd(tokCmd[1]);
+    // 4) Check multiple dst files
+    num = 0;
+    while(dstFile[num] != NULL){
+      num ++;
     }
-
-    int i = 0;
-    while (tokCmd[i] != NULL)
-        ++i;
-
-	// // Checking if ">" is the last char (what about last == '>'?)
-    // if (!strcmp(tokCmd[i - 1], ">")) {
-	// 	fprintf(stderr, "Redirection misformatted.\n");
-	// 	fflush(stderr);
-    //     // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
-    //     return -1;
-    // }
-
-    redirPtr = strdup(tokCmd[i-1]); // the file to open
-    for (int j = 0; j < i; j++) {
-        if (!strcmp(tokCmd[j], ">"))
-            redirCount++;
-    }
-    if (redirCount > 1) {
-		fprintf(stderr, "Redirection misformatted.\n");
+    // printf("num (2nd time): %d\n", num);
+    // printf("1: %s,\n 2: %s,\n 3: %s\n", dstFile[0], dstFile[1], dstFile[2]);
+    if(num > 1){
+        // printf("DEBUG: entring if\n");
+        fprintf(stderr, "Redirection misformatted.\n");
 		fflush(stderr);
-        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
         return -1;
     }
-
-	// TEST 13: SPLIT ABOUT > NOT SPACES!!
-	// printf("5th last:\t%s\n", tokCmd[i - 4]);
-	// printf("4th last:\t%s\n", tokCmd[i - 3]);
-	// printf("3rd last:\t%s\n", tokCmd[i - 2]);
-	// printf("2nd last:\t%s\n", tokCmd[i - 1]);
-	// printf("last:\t%s\n", tokCmd[i]);
-	// printf("DEBUG1: Return 0\n");
-
-	// Checks to see if more than 1 token after ">"
-	if (strcmp(tokCmd[i - 2], ">") != 0) {
-		// printf("2nd last:\t%s\n", tokCmd[i - 2]);
-		fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
-        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
-        return -1;
-    }
-
+    // Terminating correctly
     return 0;
 }
 
