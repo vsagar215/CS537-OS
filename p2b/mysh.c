@@ -32,6 +32,7 @@ struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[TOKE
 void runUnalias(struct aliasLinkedList **head, char *cmd[], int numTokens);
 void addNode(struct aliasLinkedList **headRef, char *key, char *value);
 void removeNode(struct aliasLinkedList **headRef, char *key);
+char **tokenizeRedir(char *cmd);
 
 int main(int argc, char *argv[]) {
     // buffer for write
@@ -136,6 +137,7 @@ void readCmd(FILE *stream) {
     // End of file reached
     exit(0);
 }
+
 void execCmd(char *cmd) {
     // populating executCmd with cmd
 
@@ -163,8 +165,22 @@ void execCmd(char *cmd) {
         if (toRedir == 0) {
             char *newCmd = strtok(strdup(cmd), ">"), *tokNewCmd[TOKEN_NUMBER];
             int numTok = parseInput(tokNewCmd, newCmd);
+            // ---
+            // char *tempCmd = strdup(newCmd);
+            // char *token = strtok(tempCmd, " ");
+            // int currToken = 0;
+            // do {
+            // tokNewCmd[currToken] = token;
+            // currToken++;
+            // // printf("%s\n", token);
+            // token = strtok(NULL, " "); // manuals specify this must be null
+            // } while (token != NULL);
+            // free(tempCmd);
+            // ---
             tokNewCmd[numTok] = NULL;
             //free(newCmd);
+            // printf("%s\n\n%s\n\n%s\n", tokNewCmd[0], tokNewCmd[1], tokNewCmd[2]);
+            // fflush(stdout);
             execRedir(fileName); //close stdout
             execRV = execv(executCmd[0], tokNewCmd);
         }
@@ -183,6 +199,39 @@ void execCmd(char *cmd) {
         waitpid(PID, &status, 0);
         free(executCmd);
     }
+}
+
+char **tokenizeRedir(char *cmd) {
+    int dumCount = 0, tokCount = 0;
+    // terminating in \n
+    cmd[strcspn(cmd, "\n")] = 0;
+    char *dummy = strdup(cmd);
+    char *dummy2 = strdup(cmd);
+    // splitting on spaces
+    char *token = strtok(dummy, ">");
+
+    // counting tokens
+    while (token != NULL) {
+        token = strtok(NULL, ">");
+        dumCount++;
+    }
+
+    // tokenized pointer to string
+    char **tokenized = malloc(sizeof(char *) * dumCount + 1);
+    char *tokBuf = strtok(dummy2, ">");
+
+    // Populating tokenized array
+    while (tokBuf != NULL) {
+        tokenized[tokCount] = strdup(tokBuf);
+        tokBuf = strtok(NULL, ">");
+        tokCount++;
+    }
+
+    // append null terminator to end of myargv
+    tokenized[tokCount] = NULL;
+    free(dummy);
+    free(dummy2);
+    return tokenized;
 }
 
 // TODO: Use parseInput to compute duplicate?
@@ -226,8 +275,9 @@ int parseInput(char *tokens[TOKEN_NUMBER], char *cmd) {
     char *token = strtok(tempCmd, " ");
     int currToken = 0;
     do {
-        tokens[currToken] = token;
+        tokens[currToken] = strdup(token);
         currToken++;
+        // printf("%s\n", token);
         token = strtok(NULL, " "); // manuals specify this must be null
     } while (token != NULL);
     free(tempCmd);
@@ -241,6 +291,39 @@ char *getFn(char *cmd) {
         ++i;
     char* redirPtr = strdup(tokCmd[i-1]); // the file to open
     return redirPtr;
+}
+
+int checkRedir(char *cmd, char *redirPtr){
+    if (cmd == NULL) return -1;
+
+    if (strchr(cmd, '>') == NULL) return 1;
+    // 1) check if starts w/ >
+    // 2) check if end w/ >
+    char last = cmd[strlen(cmd) - 1], first = cmd[0];
+    if (last == '>' || first == '>') {
+        fprintf(stderr, "Redirection misformatted.\n");
+		fflush(stderr);
+		// write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+        return -1;
+    }
+    // redirPtr = strdup(tokCmd[i-1]);
+    // Split by >
+    // char **tokCmd = tokenizeRedir(cmd);
+    // 3) Check multiple signs
+    // int num = 0
+    // while(tokCmd[num] != NULL){
+    //    k ++;
+    //}
+    // if(i > 2) return -1;
+    // Split by " "
+    // char **dstFile = tokenizeCmd(tokCmd[1]);
+    // 4) Check multiple dst files
+    // k = 0;
+    // while(dstFile[num] != NULL){
+    //    k ++;
+    //}
+    // if(i > 2) return -1;
+    return 0;
 }
 
 int checkRedirection(char *cmd, char *redirPtr) {
@@ -306,7 +389,7 @@ int checkRedirection(char *cmd, char *redirPtr) {
 
 void execRedir(char *fileName) {
     // Closing stdout & Handling FileIO
-    int fptr = open(fileName, O_WRONLY | O_TRUNC);
+    int fptr = open(fileName, O_WRONLY | O_TRUNC | O_CREAT, 00700);
     dup2(fptr, STDOUT_FILENO);
     if(fptr == -1) {
         fprintf(stderr, "Cannot write to file %s.\n", fileName);
