@@ -264,13 +264,13 @@ int checkRedirection(char *cmd, char *redirPtr) {
     while (tokCmd[i] != NULL)
         ++i;
 
-	// Checking if ">" is the last char (what about last == '>'?)
-    if (!strcmp(tokCmd[i - 1], ">")) {
-		fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
-        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
-        return -1;
-    }
+	// // Checking if ">" is the last char (what about last == '>'?)
+    // if (!strcmp(tokCmd[i - 1], ">")) {
+	// 	fprintf(stderr, "Redirection misformatted.\n");
+	// 	fflush(stderr);
+    //     // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+    //     return -1;
+    // }
 
     redirPtr = strdup(tokCmd[i-1]); // the file to open
     for (int j = 0; j < i; j++) {
