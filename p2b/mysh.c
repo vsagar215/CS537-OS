@@ -264,6 +264,7 @@ int checkRedirection(char *cmd, char *redirPtr) {
     while (tokCmd[i] != NULL)
         ++i;
 
+	// Checking if ">" is the last char (what about last == '>'?)
     if (!strcmp(tokCmd[i - 1], ">")) {
 		fprintf(stderr, "Redirection misformatted.\n");
 		fflush(stderr);
@@ -282,6 +283,20 @@ int checkRedirection(char *cmd, char *redirPtr) {
         // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
         return -1;
     }
+
+	// Checks to see if more than 1 token after ">"
+	if (strcmp(tokCmd[i - 2], ">") != 0) {
+		// printf("2nd last:\t%s\n", tokCmd[i - 1]);
+		fprintf(stderr, "Redirection misformatted.\n");
+		fflush(stderr);
+        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+        return -1;
+    }
+	// printf("4th last:\t%s\n", tokCmd[i - 3]);
+	// printf("3rd last:\t%s\n", tokCmd[i - 2]);
+	// printf("2nd last:\t%s\n", tokCmd[i - 1]);
+	// printf("last:\t%s\n", tokCmd[i]);
+	// printf("DEBUG1: Return 0\n");
     return 0;
 }
 
