@@ -18,7 +18,7 @@ struct aliasLinkedList
 const int BUFFER_SIZE = 512;
 const int TOKEN_NUMBER = 256;
 // char *prompt = "mysh> ";
-
+// change
 // Function signatures
 void batchMode(char *fileName);
 void readCmd(FILE *stream);
