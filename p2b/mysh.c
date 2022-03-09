@@ -35,7 +35,9 @@ void addNode(struct aliasLinkedList **headRef, char *key, char *value);
 void removeNode(struct aliasLinkedList **headRef, char *key);
 int checkRedir(char *cmd, char *redirPtr);
 char *getFn2(char *cmd);
+char *trimWhiteSpaces(char *s);
 
+struct aliasLinkedList *head;
 int main(int argc, char *argv[]) {
     // buffer for write
     char *buff;
@@ -49,8 +51,9 @@ int main(int argc, char *argv[]) {
     }
 
     // Creating head of Alias Linked List
-    struct aliasLinkedList *head = malloc(sizeof(struct aliasLinkedList)), *findAlias = NULL;
     // Initializing struct to default vals
+    head = (struct aliasLinkedList*) malloc(sizeof(struct aliasLinkedList));
+    struct aliasLinkedList *findAlias = NULL;
     head->key = head->value = "dummy\0";
     head->next = NULL;
 
@@ -65,14 +68,14 @@ int main(int argc, char *argv[]) {
     // TODO: Handle exiting when user presses ctrl+d
     while (fgets(cmd, BUFFER_SIZE, stdin)) {
         /* prompt user to enter & immediately exit if exit typed */
-        // printf("mysh> ");
-        // fflush(stdout);
-        
-
-        // TODO: Trim Whitespaces
+        //cmd = trimWhiteSpaces(cmd);
+        if(!strcmp(cmd,"\n")) {
+            printf("mysh> ");
+            fflush(stdout);
+            continue;
+        }
         char *tokens[TOKEN_NUMBER];
         int numTokens = parseInput(tokens, cmd);
-
         // terminate shell if user types exit
         if (!strncmp(cmd, "exit\n", 4))
             exit(0);
@@ -96,7 +99,6 @@ int main(int argc, char *argv[]) {
             runUnalias(&head, tokens, numTokens);
         else
             execCmd(cmd);
-
 
         PROMPT: printf("mysh> ");
         fflush(stdout);
@@ -140,9 +142,32 @@ void readCmd(FILE *stream) {
         printf("%s", s);
         fflush(stdout);
 
+        //printf("d%sd", s);
+        //fflush(stdout);
+        if(!strcmp(s,"\n")) continue;
         if (strcmp(s, "exit") == 0 || strcmp(s, "exit\n") == 0)
             exit(0);
-        execCmd(s);
+
+        char *tokens[TOKEN_NUMBER];
+        int numTokens = parseInput(tokens, s);
+
+        struct aliasLinkedList *findAlias = head;
+        int foundAlias = 0;
+        while (findAlias != NULL) {
+            if (!strncmp(findAlias->key, tokens[0], strlen((findAlias->key)))) {
+                /*Build the actual command*/
+                execCmd(findAlias->value);
+                foundAlias = 1;
+            }
+            findAlias = findAlias->next;
+        }
+         //Feature: Alias and Unalias
+        if (!strncmp(s, "alias", 4))
+            head = runAlias(head, tokens, numTokens);
+        else if (!strncmp(s, "unalias", 7))
+            runUnalias(&head, tokens, numTokens);
+        else if (foundAlias == 0)
+            execCmd(s);
     }
     // End of file reached
     exit(0);
@@ -161,7 +186,6 @@ void execCmd(char *cmd) {
     // printf("toRedir: %d\n", toRedir);
     // fflush(stdout);
     if(toRedir == 0){
-        // fileName = getFn(cmd);
         fileName = getFn2(cmd); // Function using new type of splitting
         // printf("fileName: %s\n", fileName);
         // fflush(stdout);
@@ -201,8 +225,8 @@ void execCmd(char *cmd) {
         else    execRV = execv(executCmd[0], executCmd);
 
         if (execRV == -1) {
-            printf("%s: Command not found.\n", executCmd[0]);
-            fflush(stdout);
+            fprintf(stderr, "%s: Command not found.\n", executCmd[0]);
+            fflush(stderr);
             // child process terminates itself
             _exit(1);
         }
@@ -270,13 +294,11 @@ char **tokenizeCmd(char *cmd) {
 
     // Populating tokenized array
     while (tokBuf != NULL) {
-        tokenized[tokCount] = strdup(tokBuf);
+        tokenized[tokCount] = trimWhiteSpaces(strdup(tokBuf));
         tokBuf = strtok(NULL, " ");
         tokCount++;
     }
-
-    // append null terminator to end of myargv
-    tokenized[tokCount] = NULL;
+    tokenized[tokCount] = NULL; // append null terminator to end of myargv
     free(dummy);
     free(dummy2);
     return tokenized;
@@ -284,14 +306,12 @@ char **tokenizeCmd(char *cmd) {
 
 int parseInput(char *tokens[TOKEN_NUMBER], char *cmd) {
     // tokenize cmd
-    // TODO: maybe duplicate the cmd to preserve it
     char *tempCmd = strdup(cmd);
     char *token = strtok(tempCmd, " ");
     int currToken = 0;
     do {
         tokens[currToken] = strdup(token);
         currToken++;
-        // printf("%s\n", token);
         token = strtok(NULL, " "); // manuals specify this must be null
     } while (token != NULL);
     free(tempCmd);
@@ -305,7 +325,6 @@ char *getFn(char *cmd) {
     while (tokCmd[i] != NULL)
         ++i;
     char* redirPtr = strdup(tokCmd[i-1]); // the file to open
-    // printf("fileName: %s\n", redirPtr);
     return redirPtr;
 }
 
@@ -316,7 +335,6 @@ char *getFn2(char *cmd) {
     while (tokCmd[i] != NULL)
         ++i;
     char* redirPtr = strdup(tokCmd[i-1]); // the file to open
-    // printf("fileName: %s\n", redirPtr);
     return redirPtr;
 }
 
@@ -329,8 +347,8 @@ int checkRedir(char *cmd, char *redirPtr){
     char last = cmd[strlen(cmd) - 1], first = cmd[0];
     if (last == '>' || first == '>') {
         fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
-		// write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
+        fflush(stderr);
+        // write(1, "Redirection misformatted.\n", sizeof("Redirection misformatted.\n"));
         return -1;
     }
     // Split by >
@@ -342,9 +360,9 @@ int checkRedir(char *cmd, char *redirPtr){
     }
     if(num > 2){
         fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
+        fflush(stderr);
         return -1;
-    } 
+    }
     // Assigning filename
     redirPtr = strdup(tokCmd[num - 1]);
     // Split by " "
@@ -359,7 +377,7 @@ int checkRedir(char *cmd, char *redirPtr){
     if(num > 1){
         // printf("DEBUG: entring if\n");
         fprintf(stderr, "Redirection misformatted.\n");
-		fflush(stderr);
+        fflush(stderr);
         return -1;
     }
     // Terminating correctly
@@ -371,36 +389,28 @@ char *trimWhiteSpaces(char *s)
 {
     // Second pointer for the end
     char *ep;
-
     // Trimming left side white space
     while (isspace((unsigned char)*s)) //using isspace
-    {
         s++;
-    }
 
     // If string contains nothing but white spaces
     if (*s == 0)
-    {
         return s;
-    }
 
     // Trimming right side white space
     ep = s + strlen(s) - 1;
     while (ep > s && isspace((unsigned char)*ep))
-    {
         ep--;
-    }
 
     // Writing '\0' to the end
     ep[1] = '\0';
-
     // Trimmed string
     return s;
 }
 
 void execRedir(char *fileName) {
     // Closing stdout & Handling FileIO
-    
+
     char *cpyStr = trimWhiteSpaces(fileName);
     // printf("strncmp: %d\n", strcmp(cpyStr, "tests-out/tmp.txt"));
     // fflush(stdout);
@@ -440,7 +450,7 @@ struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[256]
     /* if of form command alias <alias-name> then numTokens == 2, so then only print that one alias */
     if (numTokens == 2) {
         while (currentNode->next != NULL) {
-            if (!strncmp(currentNode->key, tokens[1], sizeof(*(currentNode->key)))) {
+            if (!strncmp(currentNode->key, tokens[1], strlen((currentNode->key)) )) {
                 printf("%s %s", currentNode->key, currentNode->value);
                 fflush(stdout);
                 return head;
@@ -458,7 +468,7 @@ struct aliasLinkedList *runAlias(struct aliasLinkedList *head, char *tokens[256]
     }
 
     for (int i = 2; i < numTokens; i++) {
-        temp = realloc(temp, sizeof(aliasVal) + sizeof(tokens[i]));
+        temp = realloc(temp, strlen(aliasVal) + strlen(tokens[i]));
         if (temp == NULL) {
             write(2, "Error not enough memory\n", sizeof("Error not enough memory\n"));
             return head;
@@ -491,8 +501,7 @@ void addNode(struct aliasLinkedList **head, char *key, char *value) {
     }
 
     while (currentNode->next != NULL) {
-        if (!strcmp(currentNode->key, key))
-            break;
+        if (!strcmp(currentNode->key, key)) break;
         currentNode = currentNode->next;
     }
 
