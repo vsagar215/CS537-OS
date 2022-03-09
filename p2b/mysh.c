@@ -181,6 +181,20 @@ void execCmd(char *cmd) {
     executCmd = tokenizeCmd(cmd);
     // printf("executCmd[0]: %s\n", executCmd[0]);
     // fflush(stdout);
+
+    // spaces in line edge case
+    int num = 0;
+    while(executCmd[num] != NULL){
+        num++;
+    }
+    // printf("num: %d\n", num);
+
+    // printf("strcmp: %d\n", strcmp(executCmd[0], ""));
+    if(strcmp(executCmd[0], "") == 0){
+        return;
+    }
+    // if(num == 1) return;
+    
     char *fileName = malloc(0);
     int toRedir = checkRedir(cmd, fileName);
     // printf("toRedir: %d\n", toRedir);
@@ -212,14 +226,6 @@ void execCmd(char *cmd) {
             // fflush(stdout);
             tokNewCmd[numTok] = NULL;
             execRedir(fileName); //close stdout
-            // printf("tokNewCmd[0]: %s\n", tokNewCmd[0]);
-            // fflush(stdout);
-            // int k = 0;
-            // while(tokNewCmd[k] != NULL){
-            //     printf("tokNewCmd: %s\n", tokNewCmd[k]);
-            //     fflush(stdout);
-            //     k++;
-            // }
             execRV = execv(tokNewCmd[0], tokNewCmd);
         }
         else    execRV = execv(executCmd[0], executCmd);
