@@ -21,46 +21,64 @@ struct kv_list
 	size_t size;
 };
 
+struct arg_strct{
+	void *map;
+	void *arg;
+};
+
 struct kv_list kvl;
 size_t kvl_counter;
 
-void init_kv_list(size_t size) {
-    kvl.elements = (struct kv**) malloc(size * sizeof(struct kv*));
-    kvl.num_elements = 0;
-    kvl.size = size;
+void init_kv_list(size_t size)
+{
+	kvl.elements = (struct kv **)malloc(size * sizeof(struct kv *));
+	kvl.num_elements = 0;
+	kvl.size = size;
 }
 
 // TODO: Fix it for threads
-void add_to_list(struct kv* elt) {
-    // Lock 1
-	if (kvl.num_elements == kvl.size) {
-	kvl.size *= 2;
-	kvl.elements = realloc(kvl.elements, kvl.size * sizeof(struct kv*));
-    }
+void add_to_list(struct kv *elt)
+{
+	// Lock 1
+	if (kvl.num_elements == kvl.size)
+	{
+		kvl.size *= 2;
+		kvl.elements = realloc(kvl.elements, kvl.size * sizeof(struct kv *));
+	}
 	// Lock 2
-    kvl.elements[kvl.num_elements++] = elt;
+	kvl.elements[kvl.num_elements++] = elt;
 }
 
-int cmp(const void* a, const void* b) {
-    char* str1 = (*(struct kv **)a)->key;
-    char* str2 = (*(struct kv **)b)->key;
-    return strcmp(str1, str2);
+int cmp(const void *a, const void *b)
+{
+	char *str1 = (*(struct kv **)a)->key;
+	char *str2 = (*(struct kv **)b)->key;
+	return strcmp(str1, str2);
 }
 
-char* get_func(char* key, int partition_number) {
-    if (kvl_counter == kvl.num_elements) {
+char *get_func(char *key, int partition_number)
+{
+	if (kvl_counter == kvl.num_elements)
+	{
+		return NULL;
+	}
+	struct kv *curr_elt = kvl.elements[kvl_counter];
+	if (!strcmp(curr_elt->key, key))
+	{
+		kvl_counter++;
+		return curr_elt->value;
+	}
 	return NULL;
-    }
-    struct kv *curr_elt = kvl.elements[kvl_counter];
-    if (!strcmp(curr_elt->key, key)) {
-	kvl_counter++;
-	return curr_elt->value;
-    }
-    return NULL;
 }
 
 void MR_Emit(char *key, char *value)
 {
+}
+
+void *thread_func(struct arg_strct *args)
+{
+	pthread_exit( args->map(args->arg));
+	// return NULL;
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions)
@@ -79,10 +97,13 @@ void MR_Run(int argc, char *argv[],
 {
 	init_kv_list(10);
 	int i;
+	void *args[2];
+	args[0] = map;
 	for (i = 1; i < argc; i++)
 	{
 		pthread_t t;
-		pthread_create(&t, NULL, map(void *), argv[i]);
+		args[1] = argv[i];
+		pthread_create(&t, NULL, map(void *),args);
 		(*map)(argv[i]);
 	}
 
