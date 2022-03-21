@@ -39,10 +39,16 @@ void MR_Run(int argc, char *argv[],
     pthread_t threads[num_mappers];
     //args.map = map;
 
+    /*Create num_mapper threads to handle the mapping*/
     for (int i = 1; i < argc; i++) {
         struct args_struct args;
         args.map = map;
         args.file_name = argv[i];
         pthread_create(&threads[i], NULL, thread_wrapper, &args);
     }
+
+
+    /*Wait on the threads*/
+    for (int i = 1; i < argc; i++)
+        pthread_join(threads[i], NULL);
 }
