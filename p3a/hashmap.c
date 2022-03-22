@@ -31,8 +31,6 @@ void MR_Emit(char *key, char *value) {
 
     //HashMap* map, char* key, void* value, int value_size
     MapPut(hash, key, value, strlen(value));
-
-
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
@@ -68,6 +66,9 @@ void MR_Run(int argc, char *argv[],
 
     hash = MapInit();
     pthread_t threads[num_mappers];
+
+    if(!partition)
+        partition = MR_DefaultHashPartition;
 
     /*Create num_mapper threads to handle the mapping*/
     for (int i = 1; i < argc; i++) {
