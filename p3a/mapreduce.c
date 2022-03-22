@@ -13,7 +13,7 @@ struct args_struct {
     char *file_name;
     char *key;
     int partition_number;
-};
+}args;
 
 void MR_Emit(char *key, char *value) {
 
@@ -49,12 +49,17 @@ void MR_Run(int argc, char *argv[],
                 Reducer reduce, int num_reducers,
                 Partitioner partition)
 {
-    pthread_t threads[num_mappers];
+    // Two arrays of threads, Map and Reduce threads
+    pthread_t map_threads[num_mappers];
+    pthread_t reduce_threads[num_reducers];
+
+    // Partitions will depend on num of reduce threads
+    args.partition_number = num_reducers;
     //args.map = map;
 
     /*Create num_mapper threads to handle the mapping*/
     for (int i = 1; i < argc; i++) {
-        struct args_struct args;
+        // struct args_struct args;
         args.map = map;
         args.file_name = argv[i];
         //pthread_create(&threads[i], NULL, thread_wrapper, &args);
@@ -62,14 +67,17 @@ void MR_Run(int argc, char *argv[],
     }
 
 
-    /*Wait on the threads*/
-    for (int i = 1; i < argc; i++)
-        pthread_join(threads[i], NULL);
+	/*Wait on the threads*/
+    for (int i = 1; i < argc; i++){
+        pthread_join(map_threads[i], NULL);
+        // stubbing reduce threads
+        pthread_join(reduce_threads[i], NULL);
+    }
 
     //TODO: Sort
 
     for(int i = 1; i < argc; i++) {
-        struct args_struct args;
+        // struct args_struct args;
         args.get_func = get_func;
         //TODO: key
         //TODO: partition number
