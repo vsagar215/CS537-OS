@@ -9,7 +9,10 @@
 
 struct args_struct {
     Mapper map;
+    Getter get_func;
     char *file_name;
+    char *key;
+    int partition_number;
 };
 
 void MR_Emit(char *key, char *value) {
@@ -24,17 +27,27 @@ unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
     return hash % num_partitions;
 }
 
-void *thread_wrapper(void *args) {
+char *get_func(char *key, int partition_number){
+    return NULL;
+}
+
+void *map_wrapper(struct args_struct *args) {
     Mapper mapFunc = ((struct args_struct *) args)->map;
     char *file_name = ((struct args_struct *) args)->file_name;
-    mapFunc(file_name);
+
+    if(file_name != NULL)
+        mapFunc(file_name);
+    return NULL;
+}
+
+void *reducer_wrapper(struct args_struct *args) {
     return NULL;
 }
 
 void MR_Run(int argc, char *argv[],
-        	    Mapper map, int num_mappers,
-	            Reducer reduce, int num_reducers,
-	            Partitioner partition)
+                Mapper map, int num_mappers,
+                Reducer reduce, int num_reducers,
+                Partitioner partition)
 {
     pthread_t threads[num_mappers];
     //args.map = map;
@@ -44,11 +57,24 @@ void MR_Run(int argc, char *argv[],
         struct args_struct args;
         args.map = map;
         args.file_name = argv[i];
-        pthread_create(&threads[i], NULL, thread_wrapper, &args);
+        //pthread_create(&threads[i], NULL, thread_wrapper, &args);
+        map_wrapper(&args);
     }
 
 
     /*Wait on the threads*/
     for (int i = 1; i < argc; i++)
         pthread_join(threads[i], NULL);
+
+    //TODO: Sort
+
+    for(int i = 1; i < argc; i++) {
+        struct args_struct args;
+        args.get_func = get_func;
+        //TODO: key
+        //TODO: partition number
+        reducer_wrapper(&args);
+
+    }
+
 }
