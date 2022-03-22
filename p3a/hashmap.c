@@ -1,155 +1,96 @@
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
+#include <stdio.h>
 #include <errno.h>
-#include "hashmap.h"
 #include <pthread.h>
+#include "mapreduce.h"
+#include "hashmap.h"
 
-#define FNV_OFFSET 14695981039346656037UL
-#define FNV_PRIME 1099511628211UL
-pthread_mutex_t lock;
+// Global structures
+HashMap *hash;
 
-// No need to lock?
-HashMap *MapInit(void)
-{
-    HashMap *hashmap = (HashMap *)malloc(sizeof(HashMap));
-    hashmap->contents = (MapPair **)calloc(MAP_INIT_CAPACITY, sizeof(MapPair *));
-    hashmap->capacity = MAP_INIT_CAPACITY;
-    hashmap->size = 0;
-    return hashmap;
+struct args_struct {
+    Mapper map;
+    Getter get_func;
+    char *file_name;
+    char *key;
+    int partition_number;
+};
+
+void MR_Emit(char *key, char *value) {
+    MapPair *elt = (MapPair*) malloc(sizeof(MapPair));
+    if (elt == NULL) {
+    	printf("Malloc error! %s\n", strerror(errno));
+    	exit(1);
+    }
+    elt->key = strdup(key);
+    elt->value = strdup(value);
+
+    //TODO: Insert into hash
+    //TODO: something with partitions??
+
+    //HashMap* map, char* key, void* value, int value_size
+    MapPut(hash, key, value, strlen(value));
+
+
 }
 
-void MapPut(HashMap *hashmap, char *key, void *value, int value_size)
-{
-    pthread_mutex_lock(&lock);
-    // lock this
-    // pthread_mutex_lock(&lock);
-    if (hashmap->size > (hashmap->capacity / 2))
-    {
-        if (resize_map(hashmap) < 0)
-        {
-            exit(0);
-        }
-    }
-    // pthread_mutex_unlock(&lock);
-    // No need to lock
-    MapPair *newpair = (MapPair *)malloc(sizeof(MapPair));
-    int h;
-
-    newpair->key = strdup(key);
-    newpair->value = (void *)malloc(value_size);
-    memcpy(newpair->value, value, value_size);
-
-    h = Hash(key, hashmap->capacity);
-    
-    while (hashmap->contents[h] != NULL)
-    {
-        // if lock the if and h incr
-        // if keys are equal, update
-        // pthread_mutex_lock(&lock);
-        if (!strcmp(key, hashmap->contents[h]->key))
-        {
-            free(hashmap->contents[h]);
-            hashmap->contents[h] = newpair;
-            pthread_mutex_unlock(&lock);
-            return;
-        }
-        h++;
-        // pthread_mutex_unlock(&lock);
-        if (h == hashmap->capacity)
-            h = 0;
-    }
-
-    // lock this
-    // key not found in hashmap, h is an empty slot
-    // pthread_mutex_lock(&lock);
-    hashmap->contents[h] = newpair;
-    hashmap->size += 1;
-    // pthread_mutex_unlock(&lock);
-    pthread_mutex_unlock(&lock);
+unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
+    unsigned long hash = 5381;
+    int c;
+    while ((c = *key++) != '\0')
+        hash = hash * 33 + c;
+    return hash % num_partitions;
 }
 
-char *MapGet(HashMap *hashmap, char *key)
-{
-    pthread_mutex_lock(&lock);
-    int h = Hash(key, hashmap->capacity);
-    while (hashmap->contents[h] != NULL)
-    {
-        // pthread_mutex_lock(&lock);
-        if (!strcmp(key, hashmap->contents[h]->key))
-        {
-            pthread_mutex_unlock(&lock);
-            return hashmap->contents[h]->value;
-        }
-        h++;
-        // pthread_mutex_unlock(&lock);
-        if (h == hashmap->capacity)
-        {
-            h = 0;
-        }
-    }
-    pthread_mutex_unlock(&lock);
+char *get_func(char *key, int partition_number){
     return NULL;
 }
 
-size_t MapSize(HashMap *map)
-{
-    return map->size;
+void *map_wrapper(struct args_struct *args) {
+    Mapper mapFunc = ((struct args_struct *) args)->map;
+    char *file_name = ((struct args_struct *) args)->file_name;
+
+    if(file_name != NULL)
+        mapFunc(file_name);
+    return NULL;
 }
 
-int resize_map(HashMap *map)
-{
-    MapPair **temp;
-    size_t newcapacity = map->capacity * 2; // double the capacity
-
-    // allocate a new hashmap table
-    temp = (MapPair **)calloc(newcapacity, sizeof(MapPair *));
-    if (temp == NULL)
-    {
-        printf("Malloc error! %s\n", strerror(errno));
-        return -1;
-    }
-
-    size_t i;
-    int h;
-    MapPair *entry;
-    // rehash all the old entries to fit the new table
-    for (i = 0; i < map->capacity; i++)
-    {
-        if (map->contents[i] != NULL)
-            entry = map->contents[i];
-        else
-            continue;
-        h = Hash(entry->key, newcapacity);
-        while (temp[h] != NULL)
-        {
-            h++;
-            if (h == newcapacity)
-                h = 0;
-        }
-        temp[h] = entry;
-    }
-
-    // free the old table
-    free(map->contents);
-    // update contents with the new table, increase hashmap capacity
-    map->contents = temp;
-    map->capacity = newcapacity;
-    return 0;
+void *reducer_wrapper(struct args_struct *args) {
+    return NULL;
 }
 
-// FNV-1a hashing algorithm
-// https://en.wikipedia.org/wiki/Fowler-Noll-Vo_hash_function#FNV-1a_hash
-size_t Hash(char *key, size_t capacity)
+void MR_Run(int argc, char *argv[],
+        	    Mapper map, int num_mappers,
+	            Reducer reduce, int num_reducers,
+	            Partitioner partition)
 {
-    // pthread_mutex_lock(&lock);
-    size_t hash = FNV_OFFSET;
-    for (const char *p = key; *p; p++)
-    {
-        hash ^= (size_t)(unsigned char)(*p);
-        hash *= FNV_PRIME;
-        hash ^= (size_t)(*p);
+
+    hash = MapInit();
+    pthread_t threads[num_mappers];
+
+    /*Create num_mapper threads to handle the mapping*/
+    for (int i = 1; i < argc; i++) {
+        struct args_struct args;
+        args.map = map;
+        args.file_name = argv[i];
+        map_wrapper(&args);
     }
-    // pthread_mutex_unlock(&lock);
-    return (hash % capacity);
+
+
+    /*Wait on the threads*/
+    for (int i = 1; i < argc; i++)
+        pthread_join(threads[i], NULL);
+
+    //TODO: Sort does not need to be locked
+
+    for(int i = 1; i < argc; i++) {
+        struct args_struct args;
+        args.get_func = get_func;
+        //TODO: key
+        //TODO: partition number
+        reducer_wrapper(&args);
+
+    }
+
 }
