@@ -49,9 +49,9 @@ void MR_Run(int argc, char *argv[],
                 Reducer reduce, int num_reducers,
                 Partitioner partition)
 {
-    // Two arrays of threads, Map and Reduce threads
-    pthread_t map_threads[num_mappers];
-    pthread_t reduce_threads[num_reducers];
+    // Two arrays of threads, Mapping and Reducer threads
+    pthread_t mapping_threads[num_mappers];
+    pthread_t reducer_threads[num_reducers];
 
     // Partitions will depend on num of reduce threads
     args.partition_number = num_reducers;
@@ -66,13 +66,13 @@ void MR_Run(int argc, char *argv[],
         // struct args_struct args;
         args.map = map;
         args.file_name = argv[i];
-        //pthread_create(&threads[i], NULL, thread_wrapper, &args);
+        //pthread_create(&mapping_threads[i], NULL, thread_wrapper, &args);
         map_wrapper(&args);
     }
 
 	/*Wait on the map threads*/
     for (int i = 1; i < argc; i++){
-        pthread_join(map_threads[i], NULL);
+        pthread_join(mapping_threads[i], NULL);
     }
 
     // STEP 2: SORT
@@ -82,12 +82,12 @@ void MR_Run(int argc, char *argv[],
 
     /*Create num_reducers threads to handle the reducing*/
 	for (int i = 0; i < num_reducers; i++){
-        //pthread_create(&reduce_threads[i], NULL, thread_wrapper, &args);
+        //pthread_create(&reducer_threads[i], NULL, thread_wrapper, &args);
 	}
 
 	/*Wait on the reduce threads*/
 	for(int i = 0; i < num_reducers; i++) {
-		pthread_join(reduce_threads[i], NULL);
+		pthread_join(reducer_threads[i], NULL);
 	}
 
     for(int i = 1; i < argc; i++) {
