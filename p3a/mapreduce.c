@@ -57,6 +57,10 @@ void MR_Run(int argc, char *argv[],
     args.partition_number = num_reducers;
     //args.map = map;
 
+    // TODO: Sorting files RR or SJF? 
+    
+    // STEP 1: MAP
+
     /*Create num_mapper threads to handle the mapping*/
     for (int i = 1; i < argc; i++) {
         // struct args_struct args;
@@ -66,15 +70,25 @@ void MR_Run(int argc, char *argv[],
         map_wrapper(&args);
     }
 
-
-	/*Wait on the threads*/
+	/*Wait on the map threads*/
     for (int i = 1; i < argc; i++){
         pthread_join(map_threads[i], NULL);
-        // stubbing reduce threads
-        pthread_join(reduce_threads[i], NULL);
     }
 
-    //TODO: Sort
+    // STEP 2: SORT
+    // TODO: Use quick Sort to sort lexicographically
+
+    // STEP 3: REDUCE
+
+    /*Create num_reducers threads to handle the reducing*/
+	for (int i = 0; i < num_reducers; i++){
+        //pthread_create(&reduce_threads[i], NULL, thread_wrapper, &args);
+	}
+
+	/*Wait on the reduce threads*/
+	for(int i = 0; i < num_reducers; i++) {
+		pthread_join(reduce_threads[i], NULL);
+	}
 
     for(int i = 1; i < argc; i++) {
         // struct args_struct args;
