@@ -11,14 +11,14 @@ struct fileName{
 };
 
 struct vars{
-    MapPair **dict;
+    int *partitionIter; // keeps track of next entry in partition
+    int partitionCount; // Count of partitions 
     struct fileName names;
-    int *numOfPairs;
-    int pairAllocPartition;
-    int *numAccPartCount;
-    int partCount;
-    int totalFiles;
-    int numFilesProc;
+    int numFilesProc; // Number of files processed by a thread
+    int *numOfPairs; // Number of KVs in a partition
+    int pairAllocPartition; 
+    MapPair **dict; // dict holding array of KV pairs
+    int totalFiles; // Total count of files 
 };
 
 pthread_mutex_t genLock;
@@ -31,6 +31,15 @@ struct MRVars {
     char *key;
     int partition_number;
 }mrVars;
+
+// List of Functions
+void MR_Emit(char *key, char *value);
+unsigned long MR_DefaultHashPartition(char *key, int num_partitions);
+char *get_func(char *key, int partition_number);
+void *map_wrapper(struct MRVars *args);
+void *reducer_wrapper(struct MRVars *args);
+void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
+void thread_Mapping(void *arg);
 
 void MR_Emit(char *key, char *value) {
 }
