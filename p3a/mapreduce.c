@@ -6,17 +6,30 @@
 #include "mapreduce.h"
 #include "hashmap.h"
 
+struct fileName{
+    char *name;
+};
 
-struct args_struct {
+struct vars{
+    MapPair **dict;
+    struct fileName names;
+    int *numOfPairs;
+    int pairAllocPartition;
+    int *numAccPartCount;
+    int partCount;
+    int totalFiles;
+    int numFilesProc;
+};
+
+struct MRVars {
     Mapper map;
     Getter get_func;
     char *file_name;
     char *key;
     int partition_number;
-}args;
+}mrVars;
 
 void MR_Emit(char *key, char *value) {
-
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
@@ -31,16 +44,16 @@ char *get_func(char *key, int partition_number){
     return NULL;
 }
 
-void *map_wrapper(struct args_struct *args) {
-    Mapper mapFunc = ((struct args_struct *) args)->map;
-    char *file_name = ((struct args_struct *) args)->file_name;
+void *map_wrapper(struct MRVars *args) {
+    Mapper mapFunc = ((struct MRVars *) args)->map;
+    char *file_name = ((struct MRVars *) args)->file_name;
 
     if(file_name != NULL)
         mapFunc(file_name);
     return NULL;
 }
 
-void *reducer_wrapper(struct args_struct *args) {
+void *reducer_wrapper(struct MRVars *args) {
     return NULL;
 }
 
@@ -54,7 +67,7 @@ void MR_Run(int argc, char *argv[],
     pthread_t reducer_threads[num_reducers];
 
     // Partitions will depend on num of reduce threads
-    args.partition_number = num_reducers;
+    mrVars.partition_number = num_reducers;
     //args.map = map;
 
     // TODO: Sorting files RR or SJF? 
@@ -64,10 +77,10 @@ void MR_Run(int argc, char *argv[],
     /*Create num_mapper threads to handle the mapping*/
     for (int i = 1; i < argc; i++) {
         // struct args_struct args;
-        args.map = map;
-        args.file_name = argv[i];
+        mrVars.map = map;
+        mrVars.file_name = argv[i];
         //pthread_create(&mapping_threads[i], NULL, thread_wrapper, &args);
-        map_wrapper(&args);
+        map_wrapper(&mrVars);
     }
 
 	/*Wait on the map threads*/
@@ -92,10 +105,10 @@ void MR_Run(int argc, char *argv[],
 
     for(int i = 1; i < argc; i++) {
         // struct args_struct args;
-        args.get_func = get_func;
+        mrVars.get_func = get_func;
         //TODO: key
         //TODO: partition number
-        reducer_wrapper(&args);
+        reducer_wrapper(&mrVars);
 
     }
 
