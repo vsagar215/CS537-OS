@@ -21,6 +21,9 @@ struct vars{
     int numFilesProc;
 };
 
+pthread_mutex_t genLock;
+pthread_mutex_t singleFileLock;
+
 struct MRVars {
     Mapper map;
     Getter get_func;
