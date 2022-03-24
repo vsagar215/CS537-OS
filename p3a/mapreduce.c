@@ -6,14 +6,16 @@
 #include "mapreduce.h"
 #include "hashmap.h"
 
+// Simplifying fileName reading
 struct fileName{
     char *name;
 };
 
-struct vars{
+// Holding all important data structures
+struct Vars{
     int *partitionIter; // keeps track of next entry in partition
     int partitionCount; // Count of partitions 
-    struct fileName names;
+    struct fileName names; // Names of the files passed
     int numFilesProc; // Number of files processed by a thread
     int *numOfPairs; // Number of KVs in a partition
     int pairAllocPartition; 
@@ -21,9 +23,11 @@ struct vars{
     int totalFiles; // Total count of files 
 };
 
+// Creating locks
 pthread_mutex_t genLock;
 pthread_mutex_t singleFileLock;
 
+// Creating data structure for MR_Run
 struct MRVars {
     Mapper map;
     Getter get_func;
