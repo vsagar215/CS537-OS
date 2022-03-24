@@ -41,7 +41,12 @@ void *reducer_wrapper(struct MRVars *args);
 void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
 void thread_Mapping(void *arg);
 
+void *reducer_wrapper(struct MRVars *args) {
+    return NULL;
+}
+
 void MR_Emit(char *key, char *value) {
+    // TODO: 
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
@@ -62,10 +67,6 @@ void *map_wrapper(struct MRVars *args) {
 
     if(file_name != NULL)
         mapFunc(file_name);
-    return NULL;
-}
-
-void *reducer_wrapper(struct MRVars *args) {
     return NULL;
 }
 
