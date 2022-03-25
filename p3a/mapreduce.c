@@ -95,10 +95,6 @@ char *get_next(char *key, int partition_number){
     return vars.dict[partition_number][i].value;
 }
 
-    // char *file_name = ((struct MRVars *) args)->file_name;
-
-    // if(file_name != NULL)
-    //     mapFunc(file_name);
 void *map_wrapper(void * ptr) {
     // TODO: Working under assumption that we have one file
     // Add while loop if more than one file?
@@ -146,7 +142,7 @@ void MR_Run(int argc, char *argv[],
     vars.numOfPairs = malloc(num_reducers * sizeof(int));
     vars.numOfPartitions = 0;
     vars.numFilesProc = 0;
-    vars.totalFiles = argc-1;
+    vars.totalFiles = argc - 1;
     vars.names.name = argv[1]; // TODO: ONLY WORKS FOR 1 FILE
 
     // TODO: Sorting files RR or SJF?
