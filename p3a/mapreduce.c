@@ -43,10 +43,10 @@ void *map_wrapper(void * ptr);
 void *reducer_wrapper(void *args);
 void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
 void thread_Mapping(void *arg);
-int sorting_helper(const void *u, const void *v);
+int pair_helper(const void *u, const void *v);
 
 
-int sorting_helper(const void *pair1, const void *pair2){
+int pair_helper(const void *pair1, const void *pair2){
 
     MapPair *u = (MapPair*) pair1; 
     MapPair *v = (MapPair*) pair2;
@@ -138,7 +138,7 @@ void MR_Run(int argc, char *argv[],
 
     // Sort partitions
 	for(i = 0; i < num_reducers; ++i)
-		qsort(vars.dict[i], vars.numOfPairs[i], sizeof(MapPair), sorting_helper);
+		qsort(vars.dict[i], vars.numOfPairs[i], sizeof(MapPair), pair_helper);
     
     // STEP 4: Reducer
     for(i = 0; i < num_mappers; i++)
@@ -149,4 +149,5 @@ void MR_Run(int argc, char *argv[],
         pthread_join(reducer_threads[i], NULL);
 
     // STEP 5: Freeing
+    
 }
