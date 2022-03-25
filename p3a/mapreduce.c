@@ -43,7 +43,18 @@ void *map_wrapper(void * ptr);
 void *reducer_wrapper(void *args);
 void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
 void thread_Mapping(void *arg);
+int sorting_helper(const void *u, const void *v);
 
+
+int sorting_helper(const void *pair1, const void *pair2){
+
+    MapPair *u = (MapPair*) pair1; 
+    MapPair *v = (MapPair*) pair2;
+
+    if(strcmp(u->key, v->key) == 0)
+        return strcmp(u->value, v->value);
+    return strcmp(u->key, v->key);
+}
 
 void MR_Emit(char *key, char *value) {
     // TODO:
@@ -77,6 +88,14 @@ void *map_wrapper(void * ptr) {
 }
 
 void *reducer_wrapper(void *args) {
+    // TODO: Add support for int array
+    int partitionNum = 0;
+    Reducer reduceFunc = mrVars.reduce;
+    int i;
+    for(i = 0; i < vars.numOfPairs[partitionNum]; ++i){
+        if(i == vars.partitionIter[partitionNum])
+            reduceFunc(vars.dict[partitionNum][i].key, get_func, partitionNum);
+    }
     return NULL;
 }
 
@@ -106,22 +125,27 @@ void MR_Run(int argc, char *argv[],
 
     // TODO: Sorting files RR or SJF?
     // STEP 2: MAP
-    for(int i = 0; i < num_mappers; i++)
+    int i;
+    for(i = 0; i < num_mappers; i++)
         pthread_create(&mapping_threads[i], NULL, map_wrapper, NULL);
 
-    for(int i = 0; i < num_mappers; i++)
+    // Wait on mapping_threads
+    for(i = 0; i < num_mappers; i++)
         pthread_join(mapping_threads[i], NULL);
 
     // STEP 3: Sort
     // Sort files
 
     // Sort partitions
-
+	for(i = 0; i < num_reducers; ++i)
+		qsort(vars.dict[i], vars.numOfPairs[i], sizeof(MapPair), sorting_helper);
+    
     // STEP 4: Reducer
-    for(int i = 0; i < num_mappers; i++)
+    for(i = 0; i < num_mappers; i++)
         pthread_create(&reducer_threads[i], NULL, reducer_wrapper, NULL);
 
-    for(int i = 0; i < num_mappers; i++)
+    // Wait on reducer_threads
+    for(i = 0; i < num_mappers; i++)
         pthread_join(reducer_threads[i], NULL);
 
     // STEP 5: Freeing
