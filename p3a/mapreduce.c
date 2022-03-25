@@ -43,8 +43,18 @@ void *map_wrapper(void * ptr);
 void *reducer_wrapper(void *args);
 void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
 void thread_Mapping(void *arg);
-int pair_helper(const void *u, const void *v);
+int pair_helper(const void *pair1, const void *pair2);
+int file_helper(const void *file1, const void *file2);
 
+int file_helper(const void *file1, const void *file2){
+    // (vars.names*) file1;
+    // int s1 = fseek(fp1, 0L, SEEK_END);
+    // int s2 = fseek(fp2, 0L, SEEK_END);
+    // fclose(fp1);
+    // fclose(fp2);
+    // return (s1 - s2);
+    return 0;
+}
 
 int pair_helper(const void *pair1, const void *pair2){
 
@@ -122,8 +132,9 @@ void MR_Run(int argc, char *argv[],
     vars.totalFiles = argc-1;
     vars.names.name = argv[1]; // TODO: ONLY WORKS FOR 1 FILE
 
-
     // TODO: Sorting files RR or SJF?
+    // qsort(&vars.names, argc - 1, sizeof(fileName), file_helper);
+
     // STEP 2: MAP
     int i;
     for(i = 0; i < num_mappers; i++)
@@ -149,5 +160,6 @@ void MR_Run(int argc, char *argv[],
         pthread_join(reducer_threads[i], NULL);
 
     // STEP 5: Freeing
-    
+    free(vars.dict);
+    free(vars.names.name);
 }
