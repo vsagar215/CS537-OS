@@ -40,13 +40,10 @@ void MR_Emit(char *key, char *value);
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions);
 char *get_func(char *key, int partition_number);
 void *map_wrapper(void * ptr);
-void *reducer_wrapper(struct MRVars *args);
+void *reducer_wrapper(void *args);
 void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
 void thread_Mapping(void *arg);
 
-void *reducer_wrapper(struct MRVars *args) {
-    return NULL;
-}
 
 void MR_Emit(char *key, char *value) {
     // TODO:
@@ -64,12 +61,22 @@ char *get_func(char *key, int partition_number){
     return NULL;
 }
 
-void *map_wrapper(void * ptr) {
-    // Mapper mapFunc = ((struct MRVars *) args)->map;
     // char *file_name = ((struct MRVars *) args)->file_name;
 
     // if(file_name != NULL)
     //     mapFunc(file_name);
+void *map_wrapper(void * ptr) {
+    // TODO: Working under assumption that we have one file
+    // Add while loop if more than one file?
+    Mapper mapFunc = mrVars.map;
+    char *file_name = vars.names.name;
+
+    if(file_name != NULL)
+         mapFunc(file_name);
+    return NULL;
+}
+
+void *reducer_wrapper(void *args) {
     return NULL;
 }
 
@@ -80,7 +87,7 @@ void MR_Run(int argc, char *argv[],
 {
     /*STEP 1: Initialization*/
     pthread_t mapping_threads[num_mappers];
-    //pthread_t reducer_threads[num_reducers];
+    pthread_t reducer_threads[num_reducers];
 
     /*Init mrVars struct*/
     mrVars.map = map;
@@ -111,6 +118,11 @@ void MR_Run(int argc, char *argv[],
     // Sort partitions
 
     // STEP 4: Reducer
+    for(int i = 0; i < num_mappers; i++)
+        pthread_create(&reducer_threads[i], NULL, reducer_wrapper, NULL);
+
+    for(int i = 0; i < num_mappers; i++)
+        pthread_join(reducer_threads[i], NULL);
 
     // STEP 5: Freeing
 }
