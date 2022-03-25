@@ -13,14 +13,14 @@ struct fileName{
 
 // Holding all important data structures
 struct Vars{
-    int *partitionIter; // keeps track of next entry in partition
-    int partitionCount; // Count of partitions 
-    struct fileName names; // Names of the files passed
-    int numFilesProc; // Number of files processed by a thread
-    int *numOfPairs; // Number of KVs in a partition
-    int pairAllocPartition; 
     MapPair **dict; // dict holding array of KV pairs
-    int totalFiles; // Total count of files 
+    struct fileName names; // Names of the files passed
+    int *partitionIter; // keeps track of next entry in partition
+    int *numOfPairs; // Number of KVs in a partition
+    int *pairAllocPartition;
+    int numOfPartitions; // Count of partitions
+    int numFilesProc; // Number of files processed by a thread
+    int totalFiles; // Total count of files
 }vars;
 
 // Creating locks
@@ -30,16 +30,16 @@ pthread_mutex_t singleFileLock;
 // Creating data structure for MR_Run
 struct MRVars {
     Mapper map;
+    Reducer reduce;
     Getter get_func;
-    char *key;
-    int partition_number;
+    Partitioner partitioner;
 }mrVars;
 
 // List of Functions
 void MR_Emit(char *key, char *value);
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions);
 char *get_func(char *key, int partition_number);
-void *map_wrapper(struct MRVars *args);
+void *map_wrapper(void * ptr);
 void *reducer_wrapper(struct MRVars *args);
 void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
 void thread_Mapping(void *arg);
@@ -49,7 +49,7 @@ void *reducer_wrapper(struct MRVars *args) {
 }
 
 void MR_Emit(char *key, char *value) {
-    // TODO: 
+    // TODO:
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
@@ -64,7 +64,7 @@ char *get_func(char *key, int partition_number){
     return NULL;
 }
 
-void *map_wrapper(struct MRVars *args) {
+void *map_wrapper(void * ptr) {
     // Mapper mapFunc = ((struct MRVars *) args)->map;
     // char *file_name = ((struct MRVars *) args)->file_name;
 
@@ -78,59 +78,39 @@ void MR_Run(int argc, char *argv[],
                 Reducer reduce, int num_reducers,
                 Partitioner partition)
 {
-    // Two arrays of threads, Mapping and Reducer threads
+    /*STEP 1: Initialization*/
     pthread_t mapping_threads[num_mappers];
-    pthread_t reducer_threads[num_reducers];
+    //pthread_t reducer_threads[num_reducers];
 
-    // Partitions will depend on num of reduce threads
-    mrVars.partition_number = num_reducers;
+    /*Init mrVars struct*/
     mrVars.map = map;
-    // TODO: ONLY WORKS FOR 1 FILE
-    vars.names.name = argv[1];
+    mrVars.reduce = reduce;
+    mrVars.partitioner = partition;
 
-//     char *key;
-//     int partition_number;
-// }mrVars;
-    // TODO: Sorting files RR or SJF? 
-    
-    // STEP 1: MAP
+    /*Init Vars struct*/
+    vars.dict = malloc(num_reducers * sizeof(MapPair *));
+    vars.partitionIter  = malloc(num_reducers * sizeof(int));
+    vars.numOfPairs = malloc(num_reducers * sizeof(int));
+    vars.numOfPartitions = 0;
+    vars.numFilesProc = 0;
+    vars.totalFiles = argc-1;
+    vars.names.name = argv[1]; // TODO: ONLY WORKS FOR 1 FILE
 
-    /*Create num_mapper threads to handle the mapping*/
-    for (int i = 1; i < argc; i++) {
-        // struct args_struct args;
-        mrVars.map = map;
-        // mrVars.file_name = argv[i];
-        //pthread_create(&mapping_threads[i], NULL, thread_wrapper, &args);
-        map_wrapper(&mrVars);
-    }
 
-	/*Wait on the map threads*/
-    for (int i = 1; i < argc; i++){
+    // TODO: Sorting files RR or SJF?
+    // STEP 2: MAP
+    for(int i = 0; i < num_mappers; i++)
+        pthread_create(&mapping_threads[i], NULL, map_wrapper, NULL);
+
+    for(int i = 0; i < num_mappers; i++)
         pthread_join(mapping_threads[i], NULL);
-    }
 
-    // STEP 2: SORT
-    // TODO: Use quick Sort to sort lexicographically
+    // STEP 3: Sort
+    // Sort files
 
-    // STEP 3: REDUCE
+    // Sort partitions
 
-    /*Create num_reducers threads to handle the reducing*/
-	for (int i = 0; i < num_reducers; i++){
-        //pthread_create(&reducer_threads[i], NULL, thread_wrapper, &args);
-	}
+    // STEP 4: Reducer
 
-	/*Wait on the reduce threads*/
-	for(int i = 0; i < num_reducers; i++) {
-		pthread_join(reducer_threads[i], NULL);
-	}
-
-    for(int i = 1; i < argc; i++) {
-        // struct args_struct args;
-        mrVars.get_func = get_func;
-        //TODO: key
-        //TODO: partition number
-        reducer_wrapper(&mrVars);
-
-    }
-
+    // STEP 5: Freeing
 }
