@@ -21,7 +21,7 @@ struct Vars{
     int pairAllocPartition; 
     MapPair **dict; // dict holding array of KV pairs
     int totalFiles; // Total count of files 
-};
+}vars;
 
 // Creating locks
 pthread_mutex_t genLock;
@@ -31,7 +31,6 @@ pthread_mutex_t singleFileLock;
 struct MRVars {
     Mapper map;
     Getter get_func;
-    char *file_name;
     char *key;
     int partition_number;
 }mrVars;
@@ -66,11 +65,11 @@ char *get_func(char *key, int partition_number){
 }
 
 void *map_wrapper(struct MRVars *args) {
-    Mapper mapFunc = ((struct MRVars *) args)->map;
-    char *file_name = ((struct MRVars *) args)->file_name;
+    // Mapper mapFunc = ((struct MRVars *) args)->map;
+    // char *file_name = ((struct MRVars *) args)->file_name;
 
-    if(file_name != NULL)
-        mapFunc(file_name);
+    // if(file_name != NULL)
+    //     mapFunc(file_name);
     return NULL;
 }
 
@@ -85,8 +84,13 @@ void MR_Run(int argc, char *argv[],
 
     // Partitions will depend on num of reduce threads
     mrVars.partition_number = num_reducers;
-    //args.map = map;
+    mrVars.map = map;
+    // TODO: ONLY WORKS FOR 1 FILE
+    vars.names.name = argv[1];
 
+//     char *key;
+//     int partition_number;
+// }mrVars;
     // TODO: Sorting files RR or SJF? 
     
     // STEP 1: MAP
@@ -95,7 +99,7 @@ void MR_Run(int argc, char *argv[],
     for (int i = 1; i < argc; i++) {
         // struct args_struct args;
         mrVars.map = map;
-        mrVars.file_name = argv[i];
+        // mrVars.file_name = argv[i];
         //pthread_create(&mapping_threads[i], NULL, thread_wrapper, &args);
         map_wrapper(&mrVars);
     }
