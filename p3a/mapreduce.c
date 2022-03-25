@@ -67,7 +67,15 @@ int pair_helper(const void *pair1, const void *pair2){
 }
 
 void MR_Emit(char *key, char *value) {
-    // TODO:
+    // lock
+    unsigned long partitionNum = mrVars.partitioner(key, vars.numOfPartitions);
+    vars.numOfPairs[partitionNum]++;
+    int pairCount = vars.numOfPairs[partitionNum];
+    vars.dict[partitionNum][pairCount - 1].key = (char*)malloc((strlen(key) + 1) * sizeof(char));
+    vars.dict[partitionNum][pairCount - 1].value = (char*)malloc((strlen(value) + 1) * sizeof(char));
+    strcpy(vars.dict[partitionNum][pairCount - 1].key, key);
+    strcpy(vars.dict[partitionNum][pairCount - 1].value, value);
+    //unlock
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
@@ -121,7 +129,11 @@ void MR_Run(int argc, char *argv[],
     /*Init mrVars struct*/
     mrVars.map = map;
     mrVars.reduce = reduce;
-    mrVars.partitioner = partition;
+    if(partition == NULL){
+        mrVars.partitioner = MR_DefaultHashPartition;
+    } else{
+        mrVars.partitioner = partition;
+    }
 
     /*Init Vars struct*/
     vars.dict = malloc(num_reducers * sizeof(MapPair *));
