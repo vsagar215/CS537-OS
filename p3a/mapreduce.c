@@ -38,7 +38,7 @@ struct MRVars {
 // List of Functions
 void MR_Emit(char *key, char *value);
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions);
-char *get_func(char *key, int partition_number);
+char *get_next(char *key, int partition_number);
 void *map_wrapper(void * ptr);
 void *reducer_wrapper(void *args);
 void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
@@ -86,8 +86,13 @@ unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
     return hash % num_partitions;
 }
 
-char *get_func(char *key, int partition_number){
-    return NULL;
+char *get_next(char *key, int partition_number){
+    int i = vars.partitionIter[partition_number];
+    if(i > vars.numOfPairs[partition_number] || strcmp(key, vars.dict[partition_number][i].key) != 0)
+        return NULL;
+    
+    vars.partitionIter[partition_number]++;
+    return vars.dict[partition_number][i].value;
 }
 
     // char *file_name = ((struct MRVars *) args)->file_name;
@@ -112,7 +117,7 @@ void *reducer_wrapper(void *args) {
     int i;
     for(i = 0; i < vars.numOfPairs[partitionNum]; ++i){
         if(i == vars.partitionIter[partitionNum])
-            reduceFunc(vars.dict[partitionNum][i].key, get_func, partitionNum);
+            reduceFunc(vars.dict[partitionNum][i].key, get_next, partitionNum);
     }
     return NULL;
 }
