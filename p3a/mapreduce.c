@@ -23,6 +23,8 @@ struct Vars{
     int totalFiles; // Total count of files
 }vars;
 
+// MapPair** partitions;
+
 // Creating locks
 pthread_mutex_t genLock;
 pthread_mutex_t singleFileLock;
@@ -66,6 +68,7 @@ int pair_helper(const void *pair1, const void *pair2){
     return strcmp(u->key, v->key);
 }
 
+// OLD
 void MR_Emit(char *key, char *value) {
     pthread_mutex_lock(&genLock);
     unsigned long partitionNum = mrVars.partitioner(key, vars.numOfPartitions);
@@ -77,6 +80,32 @@ void MR_Emit(char *key, char *value) {
     strcpy(vars.dict[partitionNum][pairCount - 1].value, value);
     pthread_mutex_unlock(&genLock);
 }
+
+// NEW
+// void MR_Emit(char *key, char *value) {
+//     pthread_mutex_lock(&genLock);
+//     unsigned long partitionNum = mrVars.partitioner(key, vars.numOfPartitions);
+//     vars.numOfPairs[partitionNum]++;
+//     int pairCount = vars.numOfPairs[partitionNum];
+//     //
+//     // if(vars.dict[partitionNum] == NULL){
+//     //     vars.dict[partitionNum] = malloc(1 * sizeof(MapPair *));
+//     // }
+
+//     // if (pairCount > vars.pairAllocPartition[partitionNum]) {
+// 	// 	vars.numOfPairs[partitionNum] *= 2;
+// 	// 	vars.dict[partitionNum] = (MapPair *) realloc(vars.dict[partitionNum], vars.numOfPairs[partitionNum] * sizeof(MapPair));
+// 	// }
+
+//     // if(vars.dict[partitionNum] )
+//     // partitions[partitionNum][pairCount-1].key = (char*)malloc((strlen(key)+1) * sizeof(char));
+//     vars.dict[partitionNum][pairCount - 1].key = (char*)malloc((strlen(key) + 1) * sizeof(char));
+//     vars.dict[partitionNum][pairCount - 1].value = (char*)malloc((strlen(value) + 1) * sizeof(char));
+//     //
+//     // strcpy(vars.dict[partitionNum][pairCount - 1].key, key);
+//     // strcpy(vars.dict[partitionNum][pairCount - 1].value, value);
+//     pthread_mutex_unlock(&genLock);
+// }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
     unsigned long hash = 5381;
@@ -140,7 +169,8 @@ void MR_Run(int argc, char *argv[],
     vars.dict = malloc(num_reducers * sizeof(MapPair *));
     vars.partitionIter  = malloc(num_reducers * sizeof(int));
     vars.numOfPairs = malloc(num_reducers * sizeof(int));
-    vars.numOfPartitions = 0;
+    vars.pairAllocPartition = malloc(num_reducers * sizeof(int));
+    vars.numOfPartitions = num_reducers;
     vars.numFilesProc = 0;
     vars.totalFiles = argc - 1;
     vars.names.name = argv[1]; // TODO: ONLY WORKS FOR 1 FILE
@@ -152,7 +182,7 @@ void MR_Run(int argc, char *argv[],
     int i;
     for(i = 0; i < num_mappers; i++)
         pthread_create(&mapping_threads[i], NULL, map_wrapper, NULL);
-
+    return;
     // Wait on mapping_threads
     for(i = 0; i < num_mappers; i++)
         pthread_join(mapping_threads[i], NULL);
@@ -174,5 +204,10 @@ void MR_Run(int argc, char *argv[],
 
     // STEP 5: Freeing
     free(vars.dict);
+    // int i;
+    // for(i = 0; i < argc - 1; ++i)
+    //     free(vars.names[i].name);
     free(vars.names.name);
+    free(vars.partitionIter);
+    free(vars.numOfPairs);
 }
