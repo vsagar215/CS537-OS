@@ -68,44 +68,26 @@ int pair_helper(const void *pair1, const void *pair2){
     return strcmp(u->key, v->key);
 }
 
-// OLD
 void MR_Emit(char *key, char *value) {
     pthread_mutex_lock(&genLock);
     unsigned long partitionNum = mrVars.partitioner(key, vars.numOfPartitions);
     vars.numOfPairs[partitionNum]++;
     int pairCount = vars.numOfPairs[partitionNum];
+    if(vars.dict[partitionNum] == NULL){
+          vars.dict[partitionNum] = malloc(1 * sizeof(MapPair *));
+    }
+
+     if (pairCount > vars.pairAllocPartition[partitionNum]) {
+ 	 	vars.numOfPairs[partitionNum] *= 2;
+ 	 	vars.dict[partitionNum] = (MapPair *) realloc(vars.dict[partitionNum], vars.numOfPairs[partitionNum] * sizeof(MapPair));
+ 	 }
+
     vars.dict[partitionNum][pairCount - 1].key = (char*)malloc((strlen(key) + 1) * sizeof(char));
     vars.dict[partitionNum][pairCount - 1].value = (char*)malloc((strlen(value) + 1) * sizeof(char));
     strcpy(vars.dict[partitionNum][pairCount - 1].key, key);
     strcpy(vars.dict[partitionNum][pairCount - 1].value, value);
     pthread_mutex_unlock(&genLock);
 }
-
-// NEW
-// void MR_Emit(char *key, char *value) {
-//     pthread_mutex_lock(&genLock);
-//     unsigned long partitionNum = mrVars.partitioner(key, vars.numOfPartitions);
-//     vars.numOfPairs[partitionNum]++;
-//     int pairCount = vars.numOfPairs[partitionNum];
-//     //
-//     // if(vars.dict[partitionNum] == NULL){
-//     //     vars.dict[partitionNum] = malloc(1 * sizeof(MapPair *));
-//     // }
-
-//     // if (pairCount > vars.pairAllocPartition[partitionNum]) {
-// 	// 	vars.numOfPairs[partitionNum] *= 2;
-// 	// 	vars.dict[partitionNum] = (MapPair *) realloc(vars.dict[partitionNum], vars.numOfPairs[partitionNum] * sizeof(MapPair));
-// 	// }
-
-//     // if(vars.dict[partitionNum] )
-//     // partitions[partitionNum][pairCount-1].key = (char*)malloc((strlen(key)+1) * sizeof(char));
-//     vars.dict[partitionNum][pairCount - 1].key = (char*)malloc((strlen(key) + 1) * sizeof(char));
-//     vars.dict[partitionNum][pairCount - 1].value = (char*)malloc((strlen(value) + 1) * sizeof(char));
-//     //
-//     // strcpy(vars.dict[partitionNum][pairCount - 1].key, key);
-//     // strcpy(vars.dict[partitionNum][pairCount - 1].value, value);
-//     pthread_mutex_unlock(&genLock);
-// }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
     unsigned long hash = 5381;
