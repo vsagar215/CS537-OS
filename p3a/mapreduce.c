@@ -58,7 +58,7 @@ int file_helper(const void *file1, const void *file2){
 
 int pair_helper(const void *pair1, const void *pair2){
 
-    MapPair *u = (MapPair*) pair1; 
+    MapPair *u = (MapPair*) pair1;
     MapPair *v = (MapPair*) pair2;
 
     if(strcmp(u->key, v->key) == 0)
@@ -90,7 +90,7 @@ char *get_next(char *key, int partition_number){
     int i = vars.partitionIter[partition_number];
     if(i > vars.numOfPairs[partition_number] || strcmp(key, vars.dict[partition_number][i].key) != 0)
         return NULL;
-    
+
     vars.partitionIter[partition_number]++;
     return vars.dict[partition_number][i].value;
 }
@@ -163,7 +163,7 @@ void MR_Run(int argc, char *argv[],
     // Sort partitions
 	for(i = 0; i < num_reducers; ++i)
 		qsort(vars.dict[i], vars.numOfPairs[i], sizeof(MapPair), pair_helper);
-    
+
     // STEP 4: Reducer
     for(i = 0; i < num_mappers; i++)
         pthread_create(&reducer_threads[i], NULL, reducer_wrapper, NULL);
