@@ -1,3 +1,4 @@
+#include <stddef.h>
 #ifndef __hashmap_h__
 #define __hashmap_h__
 

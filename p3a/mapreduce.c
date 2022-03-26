@@ -67,7 +67,7 @@ int pair_helper(const void *pair1, const void *pair2){
 }
 
 void MR_Emit(char *key, char *value) {
-    // lock
+    pthread_mutex_lock(&genLock);
     unsigned long partitionNum = mrVars.partitioner(key, vars.numOfPartitions);
     vars.numOfPairs[partitionNum]++;
     int pairCount = vars.numOfPairs[partitionNum];
@@ -75,7 +75,7 @@ void MR_Emit(char *key, char *value) {
     vars.dict[partitionNum][pairCount - 1].value = (char*)malloc((strlen(value) + 1) * sizeof(char));
     strcpy(vars.dict[partitionNum][pairCount - 1].key, key);
     strcpy(vars.dict[partitionNum][pairCount - 1].value, value);
-    //unlock
+    pthread_mutex_unlock(&genLock);
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
