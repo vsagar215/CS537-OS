@@ -77,10 +77,10 @@ void MR_Emit(char *key, char *value) {
           vars.dict[partitionNum] = malloc(1 * sizeof(MapPair *));
     }
 
-     if (pairCount > vars.pairAllocPartition[partitionNum]) {
- 	 	vars.numOfPairs[partitionNum] *= 2;
- 	 	vars.dict[partitionNum] = (MapPair *) realloc(vars.dict[partitionNum], vars.numOfPairs[partitionNum] * sizeof(MapPair));
- 	 }
+    if (pairCount > vars.pairAllocPartition[partitionNum]) {
+ 	    vars.numOfPairs[partitionNum] *= 2;
+ 	    vars.dict[partitionNum] = (MapPair *) realloc(vars.dict[partitionNum], vars.numOfPairs[partitionNum] * sizeof(MapPair));
+ 	}
 
     vars.dict[partitionNum][pairCount - 1].key = (char*)malloc((strlen(key) + 1) * sizeof(char));
     vars.dict[partitionNum][pairCount - 1].value = (char*)malloc((strlen(value) + 1) * sizeof(char));
@@ -141,11 +141,7 @@ void MR_Run(int argc, char *argv[],
     /*Init mrVars struct*/
     mrVars.map = map;
     mrVars.reduce = reduce;
-    if(partition == NULL){
-        mrVars.partitioner = MR_DefaultHashPartition;
-    } else{
-        mrVars.partitioner = partition;
-    }
+    mrVars.partitioner = partition==NULL? MR_DefaultHashPartition: partition;
 
     /*Init Vars struct*/
     vars.dict = malloc(num_reducers * sizeof(MapPair *));
@@ -164,10 +160,14 @@ void MR_Run(int argc, char *argv[],
     int i;
     for(i = 0; i < num_mappers; i++)
         pthread_create(&mapping_threads[i], NULL, map_wrapper, NULL);
-    return;
+
     // Wait on mapping_threads
-    for(i = 0; i < num_mappers; i++)
+    int closed = -1;
+    for(int j = 0; j < num_mappers; ++j)
         pthread_join(mapping_threads[i], NULL);
+
+        //printf("bool: %ld", mapping_threads[j]);
+    return;
 
     // STEP 3: Sort
     // Sort files
