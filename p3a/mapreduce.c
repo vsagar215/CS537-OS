@@ -14,15 +14,18 @@ struct dataStructures{
 	int *pairCountInPartition;
 	int *pairAllocatedInPartition;
 	int *numberOfAccessInPartition;
-	Partitioner p;
-	Reducer r;
-	Mapper m;
 	int numberPartitions;
 	int filesProcessed;
 	int totalFiles;
 	struct fileName *fileNames;
 	MapPair **partitions;
 }structs;
+
+struct functions{
+	Partitioner p;
+	Reducer r;
+	Mapper m;
+}funcs;
 
 pthread_mutex_t lock, fileLock;
 const int BUCKET_SIZE = 5000;
@@ -48,7 +51,7 @@ void* mapperHelper(void *arg) {
 			structs.filesProcessed++;
 		pthread_mutex_unlock(&fileLock);
 		if(filename != NULL)
-			structs.m(filename);
+			funcs.m(filename);
 	}
 	return arg;
 }
@@ -69,7 +72,7 @@ void* reducerHelper(void *arg) {
 	int* partitionNumber = (int *)arg;
 	for(int i = 0; i < structs.pairCountInPartition[*partitionNumber]; i++) {
 		if(i == structs.numberOfAccessInPartition[*partitionNumber]) {
-			structs.r(structs.partitions[*partitionNumber][i].key, get_next, *partitionNumber);
+			funcs.r(structs.partitions[*partitionNumber][i].key, get_next, *partitionNumber);
 		}
 	}
 	return arg;
@@ -100,7 +103,7 @@ int compareFiles(const void* p1, const void* p2) {
 void MR_Emit(char *key, char *value) {
 	pthread_mutex_lock(&lock); 
 	// Getting the partition number
-	unsigned long hashPartitionNumber = structs.p(key, structs.numberPartitions);
+	unsigned long hashPartitionNumber = funcs.p(key, structs.numberPartitions);
 	structs.pairCountInPartition[hashPartitionNumber]++;
 	int curCount = structs.pairCountInPartition[hashPartitionNumber];
 	// Checking if allocated memory has been exceeded,if yes allocating more memory
@@ -147,9 +150,9 @@ void MR_Run(int argc, char *argv[],
 	pthread_t reducerThreads[num_reducers];
 	pthread_mutex_init(&lock, NULL);
 	pthread_mutex_init(&fileLock, NULL);
-	structs.p = partition;
-	structs.m = map;
-	structs.r = reduce;
+	funcs.p = partition;
+	funcs.m = map;
+	funcs.r = reduce;
 	structs.numberPartitions = num_reducers;
 	structs.partitions = malloc(num_reducers * sizeof(struct pairs*));
 	structs.fileNames = malloc((argc - 1) * sizeof(struct fileName));
