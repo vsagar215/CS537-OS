@@ -31,7 +31,7 @@ pthread_mutex_t lock, fileLock;
 const int BUCKET_SIZE = 5000;
 
 // Function Declarations
-void* mapperHelper(void *arg);
+void* map_wrapper(void *arg);
 char* get_next(char *key, int partition_number);
 void* reducerHelper(void *arg);
 int compare(const void* p1, const void* p2);
@@ -43,17 +43,19 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
 
 
 // Helper function to be called by pthread_create which calls the mapper function
-void* mapperHelper(void *arg) {
-	while(structs.filesProcessed < structs.totalFiles) {
-		pthread_mutex_lock(&fileLock);
-		char *filename = NULL;
-			filename = structs.fileNames[structs.filesProcessed].name;
-			structs.filesProcessed++;
+void* map_wrapper(void *ptr) {
+	while(structs.filesProcessed < structs.totalFiles) { // looping until total files mapped
+		pthread_mutex_lock(&fileLock);					 // preventing incorrect counter update
+		char *filename = structs.fileNames[structs.filesProcessed].name;
+		structs.filesProcessed++;
 		pthread_mutex_unlock(&fileLock);
-		if(filename != NULL)
-			funcs.m(filename);
+		if(filename == NULL){
+			continue;
+		} else{
+			funcs.m(filename);							// only map if valid file name
+		}
 	}
-	return arg;
+	return ptr;
 }
 
 char* get_next(char *key, int partition_number) {
@@ -77,6 +79,18 @@ void* reducerHelper(void *arg) {
 	}
 	return arg;
 }
+
+// void *reducer_wrapper(void *args) {
+//     // TODO: Add support for int array
+//     int partitionNum = 0;
+//     Reducer reduceFunc = mrVars.reduce;
+//     int i;
+//     for(i = 0; i < vars.numOfPairs[partitionNum]; ++i){
+//         if(i == vars.partitionIter[partitionNum])
+//             reduceFunc(vars.dict[partitionNum][i].key, get_next, partitionNum);
+//     }
+//     return NULL;
+// }
 
 // Sort the buckets by key and then by value in ascending order
 int compare(const void* p1, const void* p2) {
@@ -184,7 +198,7 @@ void MR_Run(int argc, char *argv[],
 
 	// Creating the threads for the number of mappers
 	for (i = 0; i < num_mappers; i++) {
-		pthread_create(&mapperThreads[i], NULL, mapperHelper, NULL);
+		pthread_create(&mapperThreads[i], NULL, map_wrapper, NULL);
 	}
 
 	// Waiting for threads to finish
