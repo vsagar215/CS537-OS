@@ -1,12 +1,17 @@
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
+#include <stdlib.h>
 #include <pthread.h>
 #include "mapreduce.h"
 #include "hashmap.h"
+#include <sys/stat.h>
 
-struct fileName {
+// Globals and Structures
+pthread_mutex_t lock; 
+pthread_mutex_t file;
+const int BUCKET_SIZE = 5000;
+
+struct fileHelper {
 	char *name;
 };
 
@@ -17,7 +22,7 @@ struct dataStructures{
 	int numberPartitions;
 	int filesProcessed;
 	int totalFiles;
-	struct fileName *fileNames;
+	struct fileHelper *fileNames;
 	MapPair **partitions;
 }structs;
 
@@ -27,36 +32,16 @@ struct functions{
 	Mapper m;
 }funcs;
 
-pthread_mutex_t lock, fileLock;
-const int BUCKET_SIZE = 5000;
-
 // Function Declarations
-void* map_wrapper(void *arg);
-char* get_next(char *key, int partition_number);
-void* reducerHelper(void *arg);
+void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
+void MR_Emit(char *key, char *value);
+unsigned long MR_DefaultHashPartition(char *key, int num_partitions);
+void *map_wrapper(void *arg);
+void *reducer_wrapper(void *arg);
+char *get_next(char *key, int partition_number);
 int compare(const void* p1, const void* p2);
 int compareFiles(const void* p1, const void* p2);
-void MR_Emit(char *key, char *value);
 void custodian();
-unsigned long MR_DefaultHashPartition(char *key, int num_partitions);
-void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
-
-
-// Helper function to be called by pthread_create which calls the mapper function
-void* map_wrapper(void *ptr) {
-	while(structs.filesProcessed < structs.totalFiles) { // looping until total files mapped
-		pthread_mutex_lock(&fileLock);					 // preventing incorrect counter update
-		char *filename = structs.fileNames[structs.filesProcessed].name;
-		structs.filesProcessed++;
-		pthread_mutex_unlock(&fileLock);
-		if(filename == NULL){
-			continue;
-		} else{
-			funcs.m(filename);							// only map if valid file name
-		}
-	}
-	return ptr;
-}
 
 char* get_next(char *key, int partition_number) {
 	int num = structs.numberOfAccessInPartition[partition_number];
@@ -67,51 +52,6 @@ char* get_next(char *key, int partition_number) {
 	else {
 		return NULL;
 	}
-}
-
-// Helper function to be called by pthread_create which calls the get_next function for each reducer
-void* reducerHelper(void *arg) {
-	int* partitionNumber = (int *)arg;
-	for(int i = 0; i < structs.pairCountInPartition[*partitionNumber]; i++) {
-		if(i == structs.numberOfAccessInPartition[*partitionNumber]) {
-			funcs.r(structs.partitions[*partitionNumber][i].key, get_next, *partitionNumber);
-		}
-	}
-	return arg;
-}
-
-// void *reducer_wrapper(void *args) {
-//     // TODO: Add support for int array
-//     int partitionNum = 0;
-//     Reducer reduceFunc = mrVars.reduce;
-//     int i;
-//     for(i = 0; i < vars.numOfPairs[partitionNum]; ++i){
-//         if(i == vars.partitionIter[partitionNum])
-//             reduceFunc(vars.dict[partitionNum][i].key, get_next, partitionNum);
-//     }
-//     return NULL;
-// }
-
-// Sort the buckets by key and then by value in ascending order
-int compare(const void* p1, const void* p2) {
-	MapPair *pair1 = (MapPair*) p1;
-	MapPair *pair2 = (MapPair*) p2;
-	if(strcmp(pair1->key, pair2->key) == 0) {
-		return strcmp(pair1->value, pair2->value);
-	}
-	return strcmp(pair1->key, pair2->key);
-}
-
-// Sort files by increasing size
-int compareFiles(const void* p1, const void* p2) {
-	struct fileName *f1 = (struct fileName*) p1;
-	struct fileName *f2 = (struct fileName*) p2;
-	struct stat st1, st2;
-	stat(f1->name, &st1);
-	stat(f2->name, &st2);
-	long int size1 = st1.st_size;
-	long int size2 = st2.st_size;
-	return (size1 - size2);
 }
 
 void MR_Emit(char *key, char *value) {
@@ -130,16 +70,6 @@ void MR_Emit(char *key, char *value) {
 	structs.partitions[hashPartitionNumber][curCount-1].value = (char*)malloc((strlen(value)+1) * sizeof(char));
 	strcpy(structs.partitions[hashPartitionNumber][curCount-1].value, value);
 	pthread_mutex_unlock(&lock); 
-}
-
-void custodian(){
-	pthread_mutex_destroy(&lock);
-	pthread_mutex_destroy(&fileLock);
-	free(structs.partitions);
-	free(structs.fileNames);
-	free(structs.pairCountInPartition);
-	free(structs.pairAllocatedInPartition);
-	free(structs.numberOfAccessInPartition);
 }
 
 // TODO: Init in a method?
@@ -163,13 +93,13 @@ void MR_Run(int argc, char *argv[],
 	pthread_t mapperThreads[num_mappers];
 	pthread_t reducerThreads[num_reducers];
 	pthread_mutex_init(&lock, NULL);
-	pthread_mutex_init(&fileLock, NULL);
+	pthread_mutex_init(&file, NULL);
 	funcs.p = partition;
 	funcs.m = map;
 	funcs.r = reduce;
 	structs.numberPartitions = num_reducers;
 	structs.partitions = malloc(num_reducers * sizeof(struct pairs*));
-	structs.fileNames = malloc((argc - 1) * sizeof(struct fileName));
+	structs.fileNames = malloc((argc - 1) * sizeof(struct fileHelper));
 	structs.pairCountInPartition = malloc(num_reducers * sizeof(int));
 	structs.pairAllocatedInPartition = malloc(num_reducers * sizeof(int));
 	structs.numberOfAccessInPartition = malloc(num_reducers * sizeof(int));
@@ -194,7 +124,7 @@ void MR_Run(int argc, char *argv[],
 	}
 
 	// Sorting files as Shortest File first
-	qsort(&structs.fileNames[0], structs.totalFiles, sizeof(struct fileName), compareFiles);
+	qsort(&structs.fileNames[0], structs.totalFiles, sizeof(struct fileHelper), compareFiles);
 
 	// Creating the threads for the number of mappers
 	for (i = 0; i < num_mappers; i++) {
@@ -222,7 +152,7 @@ void MR_Run(int argc, char *argv[],
 
 	// Creating the threads for the number of reducers
 	for (i = 0; i < num_reducers; i++){
-	    if(pthread_create(&reducerThreads[i], NULL, reducerHelper, &arrayPosition[i])) {
+	    if(pthread_create(&reducerThreads[i], NULL, reducer_wrapper, &arrayPosition[i])) {
 	    	printf("Error\n");
 	    }
 	}
@@ -233,4 +163,65 @@ void MR_Run(int argc, char *argv[],
 	}
 
 	custodian();
+}
+
+// Sort files by increasing size
+int compareFiles(const void* p1, const void* p2) {
+	struct fileHelper *f1 = (struct fileHelper*) p1;
+	struct fileHelper *f2 = (struct fileHelper*) p2;
+	struct stat st1, st2;
+	stat(f1->name, &st1);
+	stat(f2->name, &st2);
+	long int size1 = st1.st_size;
+	long int size2 = st2.st_size;
+	return (size1 - size2);
+}
+
+// Sort the buckets by key and then by value in ascending order
+int compare(const void* p1, const void* p2) {
+	MapPair *pair1 = (MapPair*) p1;
+	MapPair *pair2 = (MapPair*) p2;
+	if(strcmp(pair1->key, pair2->key) == 0) {
+		return strcmp(pair1->value, pair2->value);
+	}
+	return strcmp(pair1->key, pair2->key);
+}
+
+// Helper function to be called by pthread_create which calls the mapper function
+void* map_wrapper(void *ptr) {
+	while(structs.filesProcessed < structs.totalFiles) { // looping until total files mapped
+		pthread_mutex_lock(&file);					 // preventing incorrect counter update
+		char *name = structs.fileNames[structs.filesProcessed].name;
+		structs.filesProcessed++;
+		pthread_mutex_unlock(&file);
+		if(name == NULL){
+			continue;
+		} else{
+			funcs.m(name);							// only map if valid file name
+		}
+	}
+	return ptr;
+}
+
+// Helper function to be called by pthread_create which calls the get_next function for each reducer
+void* reducer_wrapper(void *ptr) {
+	int* partitionNumber = (int *)ptr;
+	int i;
+	for(i = 0; i < structs.pairCountInPartition[*partitionNumber]; ++i) {
+		if(i == structs.numberOfAccessInPartition[*partitionNumber]) {
+			funcs.r(structs.partitions[*partitionNumber][i].key, get_next, *partitionNumber);
+		}
+	}
+	return ptr;
+}
+
+// Destroying locks and freeing memory
+void custodian(){
+	pthread_mutex_destroy(&lock);
+	pthread_mutex_destroy(&file);
+	free(structs.partitions);
+	free(structs.fileNames);
+	free(structs.pairCountInPartition);
+	free(structs.pairAllocatedInPartition);
+	free(structs.numberOfAccessInPartition);
 }
