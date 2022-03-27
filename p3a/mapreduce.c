@@ -19,24 +19,25 @@ struct files* fileNames;
 int* pairCountInPartition;
 int* pairAllocatedInPartition;
 int* numberOfAccessInPartition;
-// pthread_mutex_t lock, fileLock;
+pthread_mutex_t lock, fileLock;
 Partitioner p;
 Reducer r;
 Mapper m;
 int numberPartitions;
 int filesProcessed;
 int totalFiles;
+const int BUCKET_SIZE = 5000;
 
 // Helper function to be called by pthread_create which calls the mapper function
 void* mapperHelper(void *arg) {
 	while(filesProcessed < totalFiles) {
-		// pthread_mutex_lock(&fileLock);
+		pthread_mutex_lock(&fileLock);
 		char *filename = NULL;
 		// if(filesProcessed < totalFiles) {
 			filename = fileNames[filesProcessed].name;
 			filesProcessed++;
 		// }
-		// pthread_mutex_unlock(&fileLock);
+		pthread_mutex_unlock(&fileLock);
 		if(filename != NULL)
 			m(filename);
 	}
@@ -88,7 +89,7 @@ int compareFiles(const void* p1, const void* p2) {
 }
 
 void MR_Emit(char *key, char *value) {
-	// pthread_mutex_lock(&lock); 
+	pthread_mutex_lock(&lock); 
 	// Getting the partition number
 	unsigned long hashPartitionNumber = p(key, numberPartitions);
 	pairCountInPartition[hashPartitionNumber]++;
@@ -102,64 +103,83 @@ void MR_Emit(char *key, char *value) {
 	strcpy(partitions[hashPartitionNumber][curCount-1].key, key);
 	partitions[hashPartitionNumber][curCount-1].value = (char*)malloc((strlen(value)+1) * sizeof(char));
 	strcpy(partitions[hashPartitionNumber][curCount-1].value, value);
-	// pthread_mutex_unlock(&lock); 
+	pthread_mutex_unlock(&lock); 
 }
 
-void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition) {
+void custodian(){
+	pthread_mutex_destroy(&lock);
+	pthread_mutex_destroy(&fileLock);
+	free(partitions);
+	free(fileNames);
+	free(pairCountInPartition);
+	free(pairAllocatedInPartition);
+	free(numberOfAccessInPartition);
+}
 
-	// If thr number of files is less than number of mappers, then create threads based on number of files
-	if(argc - 1 < num_mappers) {
-		num_mappers = argc - 1;
-	}
+// TODO: Init in a method?
+// void init(int num_reducers){
+// 	for(int i = 0; i < num_reducers; i++) {
+// 		partitions[i] = malloc(BUCKET_SIZE * sizeof(struct pairs));
+// 		pairCountInPartition[i] = 0;
+// 		pairAllocatedInPartition[i] = BUCKET_SIZE;
+// 		arrayPosition[i] = i;
+// 		numberOfAccessInPartition[i] = 0;
+// 	}
+// }
+
+void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition) {
 
 	//Initialising all the required variables
 	pthread_t mapperThreads[num_mappers];
 	pthread_t reducerThreads[num_reducers];
-	// pthread_mutex_init(&lock, NULL);
-	// pthread_mutex_init(&fileLock, NULL);
+	pthread_mutex_init(&lock, NULL);
+	pthread_mutex_init(&fileLock, NULL);
 	p = partition;
 	m = map;
 	r = reduce;
 	numberPartitions = num_reducers;
 	partitions = malloc(num_reducers * sizeof(struct pairs*));
-	fileNames = malloc((argc-1) * sizeof(struct files));
+	fileNames = malloc((argc - 1) * sizeof(struct files));
 	pairCountInPartition = malloc(num_reducers * sizeof(int));
 	pairAllocatedInPartition = malloc(num_reducers * sizeof(int));
 	numberOfAccessInPartition = malloc(num_reducers * sizeof(int));
 	filesProcessed = 0;
 	totalFiles = argc - 1;
 	int arrayPosition[num_reducers];
+	int i;
+
+	// init();
 
 	// Initialising the arrays needed to store the key value pairs in the partitions
-	for(int i = 0; i < num_reducers; i++) {
-		partitions[i] = malloc(1024 * sizeof(struct pairs));
+	for(i = 0; i < num_reducers; i++) {
+		partitions[i] = malloc(BUCKET_SIZE * sizeof(struct pairs));
 		pairCountInPartition[i] = 0;
-		pairAllocatedInPartition[i] = 1024;
+		pairAllocatedInPartition[i] = BUCKET_SIZE;
 		arrayPosition[i] = i;
 		numberOfAccessInPartition[i] = 0;
 	}
 
 	// Copying files for sorting in struct
-	for(int i = 0; i <argc-1; i++) {
+	for(i = 0; i <totalFiles; i++) {
 		fileNames[i].name = malloc((strlen(argv[i+1])+1) * sizeof(char));
 		strcpy(fileNames[i].name, argv[i+1]);
 	}
 
 	// Sorting files as Shortest File first
-	qsort(&fileNames[0], argc-1, sizeof(struct files), compareFiles);
+	qsort(&fileNames[0], totalFiles, sizeof(struct files), compareFiles);
 
 	// Creating the threads for the number of mappers
-	for (int i = 0; i < num_mappers; i++) {
+	for (i = 0; i < num_mappers; i++) {
 		pthread_create(&mapperThreads[i], NULL, mapperHelper, NULL);
 	}
 
 	// Waiting for threads to finish
-	for(int i = 0; i < num_mappers; i++) {
+	for(i = 0; i < num_mappers; i++) {
 		pthread_join(mapperThreads[i], NULL); 
 	}
 
 	// Sorting the partitions
-	for(int i = 0; i < num_reducers; i++) {
+	for(i = 0; i < num_reducers; i++) {
 		qsort(partitions[i], pairCountInPartition[i], sizeof(struct pairs), compare);
 	}
 
@@ -173,46 +193,20 @@ void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce,
 	// }
 
 	// Creating the threads for the number of reducers
-	for (int i = 0; i < num_reducers; i++){
+	for (i = 0; i < num_reducers; i++){
 	    if(pthread_create(&reducerThreads[i], NULL, reducerHelper, &arrayPosition[i])) {
 	    	printf("Error\n");
 	    }
 	}
 
 	//Waiting for the threads to finish
-	for(int i = 0; i < num_reducers; i++) {
+	for(i = 0; i < num_reducers; i++) {
 		pthread_join(reducerThreads[i], NULL); 
 	}
 
-	// pthread_mutex_destroy(&lock);
-	// pthread_mutex_destroy(&fileLock);
-
-	// for(int i = 0; i < num_reducers; i++) {
-	// 	// Freeing the keys and values
-	// 	for(int j = 0; j < pairCountInPartition[i]; j++) {
-	// 		if(partitions[i][j].key != NULL && partitions[i][j].value != NULL) {
-	// 			free(partitions[i][j].key);
-	// 	    	free(partitions[i][j].value);
-	// 		}
-	// 	}
-	// 	// Freeing the pair struct array
-	// 	free(partitions[i]);
-	// }
-
-	// Freeing filenames
-	// for(int i = 0; i < argc-1; i++) {
-	// 	free(fileNames[i].name);
-	// }
-
-	// Freeing memory
-	free(partitions);
-	free(fileNames);
-	free(pairCountInPartition);
-	free(pairAllocatedInPartition);
-	free(numberOfAccessInPartition);
+	custodian();
 }
 
-// Given default hash function
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
     unsigned long hash = 5381;
     int c;
