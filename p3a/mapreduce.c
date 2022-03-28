@@ -16,8 +16,8 @@ struct fileHelper {
 };
 
 struct CentralDataStructure{
-	MapPair **partitions;
-	int *pairCountInPartition;
+	MapPair **bucket;
+	int *numOfKVs;
 	int *pairAllocatedInPartition;
 	int *numberOfAccessInPartition;
 	int numberPartitions;
@@ -27,9 +27,9 @@ struct CentralDataStructure{
 }cds;
 
 struct MapReduceFunctions{
-	Mapper m;
-	Reducer r;
-	Partitioner p;
+	Mapper map;
+	Reducer reduce;
+	Partitioner partition;
 }mrf;
 
 // Function Declarations
@@ -47,26 +47,26 @@ void custodian();
 void MR_Emit(char *key, char *value) {
 	pthread_mutex_lock(&lock);			// Preventing incomplete memory reallocation
 	// Getting bucket corresponding to passed key
-	unsigned long hashPartitionNumber = mrf.p(key, cds.numberPartitions);
-	int numOfKV = ++cds.pairCountInPartition[hashPartitionNumber]; // Getting updated number of KVs in given bucket
+	unsigned long hashPartitionNumber = mrf.partition(key, cds.numberPartitions);
+	int numOfKV = ++cds.numOfKVs[hashPartitionNumber]; // Getting updated number of KVs in given bucket
 	// If space in bucket, simply copy KVs
 	if(numOfKV <= cds.pairAllocatedInPartition[hashPartitionNumber]){
 		// Making space 
-		cds.partitions[hashPartitionNumber][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
-		cds.partitions[hashPartitionNumber][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
+		cds.bucket[hashPartitionNumber][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
+		cds.bucket[hashPartitionNumber][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
 	
 		// Storing keys and values
-		strcpy(cds.partitions[hashPartitionNumber][numOfKV - 1].key, key);
-		strcpy(cds.partitions[hashPartitionNumber][numOfKV - 1].value, value);
+		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].key, key);
+		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].value, value);
 	} else{ // Otherwise alloc space in bucket first
 		cds.pairAllocatedInPartition[hashPartitionNumber] *= 2; // double the size of bucket
-		cds.partitions[hashPartitionNumber] = (MapPair *) realloc(cds.partitions[hashPartitionNumber], cds.pairAllocatedInPartition[hashPartitionNumber] * sizeof(MapPair));
+		cds.bucket[hashPartitionNumber] = (MapPair *) realloc(cds.bucket[hashPartitionNumber], cds.pairAllocatedInPartition[hashPartitionNumber] * sizeof(MapPair));
 
-		cds.partitions[hashPartitionNumber][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
-		cds.partitions[hashPartitionNumber][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
+		cds.bucket[hashPartitionNumber][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
+		cds.bucket[hashPartitionNumber][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
 
-		strcpy(cds.partitions[hashPartitionNumber][numOfKV - 1].key, key);
-		strcpy(cds.partitions[hashPartitionNumber][numOfKV - 1].value, value);
+		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].key, key);
+		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].value, value);
 	}
 
 	pthread_mutex_unlock(&lock); 
@@ -113,7 +113,7 @@ void MR_Run(int argc, char *argv[],
 	/*STEP 3: Sorting*/
 	// Sort partitions
 	for(i = 0; i < cds.numberPartitions; ++i) {
-		qsort(cds.partitions[i], cds.pairCountInPartition[i], sizeof(MapPair), cmp);
+		qsort(cds.bucket[i], cds.numOfKVs[i], sizeof(MapPair), cmp);
 	}
 
 	/*STEP 4: Reduce*/
@@ -136,23 +136,23 @@ void init_cds(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduc
 	// Central Data Structure
 	cds.totalFiles = argc - 1;
 	cds.numberPartitions = num_reducers;
-	cds.partitions = malloc(cds.numberPartitions * sizeof(struct pairs*));
+	cds.bucket = malloc(cds.numberPartitions * sizeof(struct pairs*));
 	cds.fileNames = malloc((cds.totalFiles) * sizeof(struct fileHelper));
-	cds.pairCountInPartition = malloc(cds.numberPartitions * sizeof(int));
+	cds.numOfKVs = malloc(cds.numberPartitions * sizeof(int));
 	cds.pairAllocatedInPartition = malloc(cds.numberPartitions * sizeof(int));
 	cds.numberOfAccessInPartition = malloc(cds.numberPartitions * sizeof(int));
 	cds.filesProcessed = 0;
 	int i;
 
 	// MapReduce Functions
-	mrf.m = map;
-	mrf.r = reduce;
-	mrf.p = partition;
+	mrf.map = map;
+	mrf.reduce = reduce;
+	mrf.partition = partition;
 
 	// Initialising the arrays needed to store the key value pairs in the partitions
 	for(i = 0; i < num_reducers; i++) {
-		cds.partitions[i] = malloc(BUCKET_SIZE * sizeof(MapPair));
-		cds.pairCountInPartition[i] = 0;
+		cds.bucket[i] = malloc(BUCKET_SIZE * sizeof(MapPair));
+		cds.numOfKVs[i] = 0;
 		cds.pairAllocatedInPartition[i] = BUCKET_SIZE;
 		arrayPosition[i] = i;
 		cds.numberOfAccessInPartition[i] = 0;
@@ -204,7 +204,7 @@ void *map_wrapper(void *ptr) {
 		if(name == NULL){
 			continue;
 		} else{
-			mrf.m(name);							// only map if valid file name
+			mrf.map(name);							// only map if valid file name
 		}
 	}
 	return ptr;
@@ -214,13 +214,13 @@ char *get_next(char *key, int partition_number) {
 	
 	int curr_KV = cds.numberOfAccessInPartition[partition_number];
 	// Reached end of bucket
-	if(curr_KV >= cds.pairCountInPartition[partition_number])
+	if(curr_KV >= cds.numOfKVs[partition_number])
 		return NULL;
 	
 	// If key exists in the bucket, return value 
-	if(strcmp(key, cds.partitions[partition_number][curr_KV].key) == 0) {
+	if(strcmp(key, cds.bucket[partition_number][curr_KV].key) == 0) {
 			cds.numberOfAccessInPartition[partition_number]++; 
-			return cds.partitions[partition_number][curr_KV].value;
+			return cds.bucket[partition_number][curr_KV].value;
 	}
 
 	return NULL;
@@ -229,9 +229,9 @@ char *get_next(char *key, int partition_number) {
 void *reducer_wrapper(void *ptr) {
 	int *partitionNumber = (int *)ptr;
 	int i;
-	for(i = 0; i < cds.pairCountInPartition[*partitionNumber]; ++i) {
+	for(i = 0; i < cds.numOfKVs[*partitionNumber]; ++i) {
 		if(i == cds.numberOfAccessInPartition[*partitionNumber]) {
-			mrf.r(cds.partitions[*partitionNumber][i].key, get_next, *partitionNumber);
+			mrf.reduce(cds.bucket[*partitionNumber][i].key, get_next, *partitionNumber);
 		}
 	}
 	return ptr;
@@ -239,11 +239,14 @@ void *reducer_wrapper(void *ptr) {
 
 // Destroying locks and freeing memory
 void custodian(){
+	// Locks
 	pthread_mutex_destroy(&lock);
 	pthread_mutex_destroy(&file);
-	free(cds.partitions);
+	
+	// Central Data Structure
+	free(cds.bucket);
+	free(cds.numOfKVs);
 	free(cds.fileNames);
-	free(cds.pairCountInPartition);
 	free(cds.pairAllocatedInPartition);
 	free(cds.numberOfAccessInPartition);
 }
