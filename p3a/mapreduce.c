@@ -38,27 +38,37 @@ void MR_Emit(char *key, char *value);
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions);
 void init_cds(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition, int *arrayPosition);
 int SFF(const void* p, const void* q);
-void *map_wrapper(void *arg);
+void *map_wrapper(void *ptr);
 int cmp(const void* p, const void* q);
-char *get_func(char *key, int partition_number);
-void *reducer_wrapper(void *arg);
+char *get_next(char *key, int partition_number);
+void *reducer_wrapper(void *ptr);
 void custodian();
 
 void MR_Emit(char *key, char *value) {
-	pthread_mutex_lock(&lock); 
-	// Getting the partition number
+	pthread_mutex_lock(&lock);			// Preventing incomplete memory reallocation
+	// Getting bucket corresponding to passed key
 	unsigned long hashPartitionNumber = mrf.p(key, cds.numberPartitions);
-	cds.pairCountInPartition[hashPartitionNumber]++;
-	int curCount = cds.pairCountInPartition[hashPartitionNumber];
-	// Checking if allocated memory has been exceeded,if yes allocating more memory
-	if (curCount > cds.pairAllocatedInPartition[hashPartitionNumber]) {
-		cds.pairAllocatedInPartition[hashPartitionNumber] *= 2;
+	int numOfKV = ++cds.pairCountInPartition[hashPartitionNumber]; // Getting updated number of KVs in given bucket
+	// If space in bucket, simply copy KVs
+	if(numOfKV <= cds.pairAllocatedInPartition[hashPartitionNumber]){
+		// Making space 
+		cds.partitions[hashPartitionNumber][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
+		cds.partitions[hashPartitionNumber][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
+	
+		// Storing keys and values
+		strcpy(cds.partitions[hashPartitionNumber][numOfKV - 1].key, key);
+		strcpy(cds.partitions[hashPartitionNumber][numOfKV - 1].value, value);
+	} else{ // Otherwise alloc space in bucket first
+		cds.pairAllocatedInPartition[hashPartitionNumber] *= 2; // double the size of bucket
 		cds.partitions[hashPartitionNumber] = (MapPair *) realloc(cds.partitions[hashPartitionNumber], cds.pairAllocatedInPartition[hashPartitionNumber] * sizeof(MapPair));
+
+		cds.partitions[hashPartitionNumber][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
+		cds.partitions[hashPartitionNumber][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
+
+		strcpy(cds.partitions[hashPartitionNumber][numOfKV - 1].key, key);
+		strcpy(cds.partitions[hashPartitionNumber][numOfKV - 1].value, value);
 	}
-	cds.partitions[hashPartitionNumber][curCount-1].key = (char*)malloc((strlen(key)+1) * sizeof(char));
-	strcpy(cds.partitions[hashPartitionNumber][curCount-1].key, key);
-	cds.partitions[hashPartitionNumber][curCount-1].value = (char*)malloc((strlen(value)+1) * sizeof(char));
-	strcpy(cds.partitions[hashPartitionNumber][curCount-1].value, value);
+
 	pthread_mutex_unlock(&lock); 
 }
 
@@ -116,16 +126,6 @@ void MR_Run(int argc, char *argv[],
 		pthread_join(reducerThreads[i], NULL); 
 	}
 
-	// i = 0;
-	// while(i != NULL){
-	// 	printf("%d\n", cds.numberOfAccessInPartition[i]);
-	// 	++i;
-	// }
-
-	// for(i = 0; i < num_mappers; ++i) {
-	// 	printf("%d\n", cds.numberOfAccessInPartition[i]);
-	// }
-	
 	/*STEP 5: Cleanup*/
 	custodian();
 }
@@ -194,8 +194,10 @@ int cmp(const void* p, const void* q) {
 }
 
 void *map_wrapper(void *ptr) {
-	while(cds.filesProcessed < cds.totalFiles) { // looping until total files mapped
-		pthread_mutex_lock(&file);					 // preventing incorrect counter update
+	// looping until total files mapped
+	while(cds.filesProcessed < cds.totalFiles) { 
+		// preventing incorrect counter update
+		pthread_mutex_lock(&file);					 
 		char *name = cds.fileNames[cds.filesProcessed].name;
 		cds.filesProcessed++;
 		pthread_mutex_unlock(&file);
@@ -208,12 +210,9 @@ void *map_wrapper(void *ptr) {
 	return ptr;
 }
 
-char *get_func(char *key, int partition_number) {
-	// NUMBER OF KV PAIRS IN A PARTITION?
+char *get_next(char *key, int partition_number) {
+	
 	int curr_KV = cds.numberOfAccessInPartition[partition_number];
-	printf("numberOfAccessInPartition: %d\n", curr_KV);
-	printf("numberOfAccessInPartition: %d\n\n", cds.pairCountInPartition[partition_number]);
-	printf("value: %p\n", cds.partitions[partition_number][curr_KV].value);
 	// Reached end of bucket
 	if(curr_KV >= cds.pairCountInPartition[partition_number])
 		return NULL;
@@ -232,7 +231,7 @@ void *reducer_wrapper(void *ptr) {
 	int i;
 	for(i = 0; i < cds.pairCountInPartition[*partitionNumber]; ++i) {
 		if(i == cds.numberOfAccessInPartition[*partitionNumber]) {
-			mrf.r(cds.partitions[*partitionNumber][i].key, get_func, *partitionNumber);
+			mrf.r(cds.partitions[*partitionNumber][i].key, get_next, *partitionNumber);
 		}
 	}
 	return ptr;
