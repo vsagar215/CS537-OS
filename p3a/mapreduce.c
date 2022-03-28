@@ -116,6 +116,16 @@ void MR_Run(int argc, char *argv[],
 		pthread_join(reducerThreads[i], NULL); 
 	}
 
+	// i = 0;
+	// while(i != NULL){
+	// 	printf("%d\n", cds.numberOfAccessInPartition[i]);
+	// 	++i;
+	// }
+
+	// for(i = 0; i < num_mappers; ++i) {
+	// 	printf("%d\n", cds.numberOfAccessInPartition[i]);
+	// }
+	
 	/*STEP 5: Cleanup*/
 	custodian();
 }
@@ -199,17 +209,19 @@ void *map_wrapper(void *ptr) {
 }
 
 char *get_func(char *key, int partition_number) {
-	// NUMBER OF KV PAIRS IN A PARTITION!!
+	// NUMBER OF KV PAIRS IN A PARTITION?
 	int curr_KV = cds.numberOfAccessInPartition[partition_number];
-	
+	printf("numberOfAccessInPartition: %d\n", curr_KV);
+	printf("numberOfAccessInPartition: %d\n\n", cds.pairCountInPartition[partition_number]);
+	printf("value: %p\n", cds.partitions[partition_number][curr_KV].value);
 	// Reached end of bucket
 	if(curr_KV >= cds.pairCountInPartition[partition_number])
 		return NULL;
 	
 	// If key exists in the bucket, return value 
-	if(strcmp(key, cds.partitions[partition_number][num].key) == 0) {
+	if(strcmp(key, cds.partitions[partition_number][curr_KV].key) == 0) {
 			cds.numberOfAccessInPartition[partition_number]++; 
-			return cds.partitions[partition_number][num].value;
+			return cds.partitions[partition_number][curr_KV].value;
 	}
 
 	return NULL;
