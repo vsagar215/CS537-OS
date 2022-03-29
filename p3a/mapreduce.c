@@ -7,15 +7,13 @@
 #include <sys/stat.h>
 
 // Globals and Structures
-pthread_mutex_t lock; 
-pthread_mutex_t file;
+pthread_mutex_t genLock; 
+pthread_mutex_t fileLock;
 const int BUCKET_SIZE = 5000;
 
 struct fileHelper {
 	char *name;
 };
-
-// KVpointerInBucket
 
 struct CentralDataStructure{
 	MapPair **bucket;
@@ -47,31 +45,36 @@ void *reducer_wrapper(void *ptr);
 void custodian();
 
 void MR_Emit(char *key, char *value) {
-	pthread_mutex_lock(&lock);			// Preventing incomplete memory reallocation
-	// Getting bucket corresponding to passed key
-	unsigned long hashPartitionNumber = mrf.partition(key, cds.numOfBuckets);
-	int numOfKV = ++cds.numOfKVs[hashPartitionNumber]; // Getting updated number of KVs in given bucket
-	// If space in bucket, simply copy KVs
-	if(numOfKV <= cds.allocedKVs[hashPartitionNumber]){
-		// Making space 
-		cds.bucket[hashPartitionNumber][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
-		cds.bucket[hashPartitionNumber][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
+	pthread_mutex_lock(&genLock);			// Preventing incomplete memory reallocation
 	
+	// Getting bucket corresponding to passed key
+	unsigned long hashedBucketKey = mrf.partition(key, cds.numOfBuckets);
+	int numOfKV = ++cds.numOfKVs[hashedBucketKey]; // Getting updated number of KVs in given bucket
+
+	// If space in bucket, simply copy KVs
+	if(numOfKV <= cds.allocedKVs[hashedBucketKey]){
+		// Making space 
+		cds.bucket[hashedBucketKey][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
+		cds.bucket[hashedBucketKey][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
+
 		// Storing keys and values
-		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].key, key);
-		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].value, value);
-	} else{ // Otherwise alloc space in bucket first
-		cds.allocedKVs[hashPartitionNumber] *= 2; // double the size of bucket
-		cds.bucket[hashPartitionNumber] = (MapPair *) realloc(cds.bucket[hashPartitionNumber], cds.allocedKVs[hashPartitionNumber] * sizeof(MapPair));
+		strcpy(cds.bucket[hashedBucketKey][numOfKV - 1].key, key);
+		strcpy(cds.bucket[hashedBucketKey][numOfKV - 1].value, value);
+		 
+	} 
+	else{ //Otherwise alloc space in bucket first
+		cds.allocedKVs[hashedBucketKey] *= 2; // double the size of bucket
+		cds.bucket[hashedBucketKey] = (MapPair *) realloc(cds.bucket[hashedBucketKey], cds.allocedKVs[hashedBucketKey] * sizeof(MapPair));
 
-		cds.bucket[hashPartitionNumber][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
-		cds.bucket[hashPartitionNumber][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
+		cds.bucket[hashedBucketKey][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
+		cds.bucket[hashedBucketKey][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
 
-		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].key, key);
-		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].value, value);
+		strcpy(cds.bucket[hashedBucketKey][numOfKV - 1].key, key);
+		strcpy(cds.bucket[hashedBucketKey][numOfKV - 1].value, value);
+
 	}
 
-	pthread_mutex_unlock(&lock); 
+	pthread_mutex_unlock(&genLock); 
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
@@ -89,8 +92,8 @@ void MR_Run(int argc, char *argv[],
 {	
 	/*STEP 1: Initialization*/
 	// Initializing locks and local vars 
-	pthread_mutex_init(&lock, NULL);
-	pthread_mutex_init(&file, NULL);
+	pthread_mutex_init(&genLock, NULL);
+	pthread_mutex_init(&fileLock, NULL);
 	pthread_t mapperThreads[num_mappers];
 	pthread_t reducerThreads[num_reducers];
 	int bucketPointer[num_reducers];
@@ -199,10 +202,10 @@ void *map_wrapper(void *ptr) {
 	// looping until total files mapped
 	while(cds.filesConsumed < cds.totalNumOfFiles) { 
 		// preventing incorrect counter update
-		pthread_mutex_lock(&file);					 
+		pthread_mutex_lock(&fileLock);					 
 		char *name = cds.fileNames[cds.filesConsumed].name;
 		cds.filesConsumed++;
-		pthread_mutex_unlock(&file);
+		pthread_mutex_unlock(&fileLock);
 		if(name == NULL){
 			continue;
 		} else{
@@ -242,8 +245,8 @@ void *reducer_wrapper(void *ptr) {
 // Destroying locks and freeing memory
 void custodian(){
 	// Locks
-	pthread_mutex_destroy(&lock);
-	pthread_mutex_destroy(&file);
+	pthread_mutex_destroy(&genLock);
+	pthread_mutex_destroy(&fileLock);
 	
 	// Central Data Structure
 	free(cds.bucket);

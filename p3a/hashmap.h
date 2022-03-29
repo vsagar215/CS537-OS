@@ -1,4 +1,4 @@
-#include <stddef.h>
+#include<stddef.h>
 #ifndef __hashmap_h__
 #define __hashmap_h__
 
@@ -13,6 +13,7 @@ typedef struct {
     MapPair** contents;
     size_t capacity;
     size_t size;
+    pthread_rwlock_t mapLock;
 } HashMap;
 
 
