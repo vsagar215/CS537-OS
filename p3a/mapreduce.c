@@ -15,6 +15,8 @@ struct fileHelper {
 	char *name;
 };
 
+// KVpointerInBucket
+
 struct CentralDataStructure{
 	MapPair **bucket;
 	int *numOfKVs;
@@ -134,15 +136,15 @@ void MR_Run(int argc, char *argv[],
 void init_cds(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition, int *bucketPointer){
 	
 	// Central Data Structure
+	cds.numOfBuckets = num_reducers;
+	cds.totalNumOfFiles = argc - 1;
 	cds.fileNames = malloc((cds.totalNumOfFiles) * sizeof(struct fileHelper));
 	cds.bucket = malloc(cds.numOfBuckets * sizeof(struct pairs*));
 	cds.allocedKVs = malloc(cds.numOfBuckets * sizeof(int));
 	cds.numOfKVs = malloc(cds.numOfBuckets * sizeof(int));
 	cds.KVpointerInBucket = malloc(cds.numOfBuckets * sizeof(int));
-	cds.totalNumOfFiles = argc - 1;
 	cds.filesConsumed = 0;
 	int i;
-	cds.numOfBuckets = num_reducers;
 
 	// MapReduce Functions
 	mrf.map = map;
