@@ -8,7 +8,8 @@
 
 #define FNV_OFFSET 14695981039346656037UL
 #define FNV_PRIME 1099511628211UL
-pthread_mutex_t lock;
+// pthread_mutex_t lock;
+pthread_rwlock_t lock;
 
 // No need to lock?
 HashMap *MapInit(void)
@@ -22,7 +23,7 @@ HashMap *MapInit(void)
 
 void MapPut(HashMap *hashmap, char *key, void *value, int value_size)
 {
-    pthread_mutex_lock(&lock);
+    // pthread_mutex_lock(&lock);
     // lock this
     // pthread_mutex_lock(&lock);
     if (hashmap->size > (hashmap->capacity / 2))
@@ -50,9 +51,10 @@ void MapPut(HashMap *hashmap, char *key, void *value, int value_size)
         // pthread_mutex_lock(&lock);
         if (!strcmp(key, hashmap->contents[h]->key))
         {
+            pthread_rwlock_rdlock(&lock);
             free(hashmap->contents[h]);
             hashmap->contents[h] = newpair;
-            pthread_mutex_unlock(&lock);
+            pthread_rwlock_unlock(&lock);
             return;
         }
         h++;
@@ -63,33 +65,34 @@ void MapPut(HashMap *hashmap, char *key, void *value, int value_size)
 
     // lock this
     // key not found in hashmap, h is an empty slot
+    pthread_rwlock_rdlock(&lock);
     // pthread_mutex_lock(&lock);
     hashmap->contents[h] = newpair;
     hashmap->size += 1;
     // pthread_mutex_unlock(&lock);
-    pthread_mutex_unlock(&lock);
+    pthread_rwlock_unlock(&lock);
 }
 
 char *MapGet(HashMap *hashmap, char *key)
 {
-    pthread_mutex_lock(&lock);
     int h = Hash(key, hashmap->capacity);
     while (hashmap->contents[h] != NULL)
     {
+    pthread_rwlock_wrlock(&lock);
         // pthread_mutex_lock(&lock);
         if (!strcmp(key, hashmap->contents[h]->key))
         {
-            pthread_mutex_unlock(&lock);
+            pthread_rwlock_unlock(&lock);
             return hashmap->contents[h]->value;
         }
         h++;
+    pthread_rwlock_unlock(&lock);
         // pthread_mutex_unlock(&lock);
         if (h == hashmap->capacity)
         {
             h = 0;
         }
     }
-    pthread_mutex_unlock(&lock);
     return NULL;
 }
 
