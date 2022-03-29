@@ -22,13 +22,6 @@ HashMap *MapInit(void) {
 
 void MapPut(HashMap *hashmap, char *key, void *value, int value_size) {
     
-    pthread_rwlock_wrlock(&hashmap->lock);
-    if (hashmap->size > (hashmap->capacity / 2)) {
-        if (resize_map(hashmap) < 0)
-            exit(0);
-    }
-
-    // No need to lock
     MapPair *newpair = (MapPair *)malloc(sizeof(MapPair));
     int h;
 
@@ -36,6 +29,15 @@ void MapPut(HashMap *hashmap, char *key, void *value, int value_size) {
     newpair->value = (void *)malloc(value_size);
     memcpy(newpair->value, value, value_size);
 
+    pthread_rwlock_wrlock(&hashmap->lock);
+    if (hashmap->size > (hashmap->capacity / 2)) {
+        if (resize_map(hashmap) < 0)
+            exit(0);
+    }
+    // pthread_rwlock_unlock(&hashmap->lock);
+    // No need to lock
+
+    // pthread_rwlock_wrlock(&hashmap->lock);
     h = Hash(key, hashmap->capacity);
     while (hashmap->contents[h] != NULL) {
 
