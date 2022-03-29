@@ -21,13 +21,12 @@ HashMap *MapInit(void) {
 }
 
 void MapPut(HashMap *hashmap, char *key, void *value, int value_size) {
-    // lock this
-    // pthread_rwlock_wrlock(&hashmap->lock);
+    
+    pthread_rwlock_wrlock(&hashmap->lock);
     if (hashmap->size > (hashmap->capacity / 2)) {
         if (resize_map(hashmap) < 0)
             exit(0);
     }
-    // pthread_rwlock_unlock(&hashmap->lock);
 
     // No need to lock
     MapPair *newpair = (MapPair *)malloc(sizeof(MapPair));
@@ -38,16 +37,15 @@ void MapPut(HashMap *hashmap, char *key, void *value, int value_size) {
     memcpy(newpair->value, value, value_size);
 
     h = Hash(key, hashmap->capacity);
-    
     while (hashmap->contents[h] != NULL) {
 
         // if lock the if and h incr
         // if keys are equal, update
         if (!strcmp(key, hashmap->contents[h]->key)) {
-            pthread_rwlock_wrlock(&hashmap->lock);
+            // pthread_rwlock_wrlock(&hashmap->lock);
             free(hashmap->contents[h]);
             hashmap->contents[h] = newpair;
-            pthread_rwlock_unlock(&hashmap->lock);
+            // pthread_rwlock_unlock(&hashmap->lock);
             return;
         }
         h++;
@@ -57,7 +55,7 @@ void MapPut(HashMap *hashmap, char *key, void *value, int value_size) {
 
     // lock this
     // key not found in hashmap, h is an empty slot
-    pthread_rwlock_wrlock(&hashmap->lock);
+    // pthread_rwlock_wrlock(&hashmap->lock);
     hashmap->contents[h] = newpair;
     hashmap->size += 1;
     pthread_rwlock_unlock(&hashmap->lock);
@@ -65,23 +63,25 @@ void MapPut(HashMap *hashmap, char *key, void *value, int value_size) {
 
 char *MapGet(HashMap *hashmap, char *key)
 {
+    pthread_rwlock_rdlock(&hashmap->lock);
     int h = Hash(key, hashmap->capacity);
     while (hashmap->contents[h] != NULL)
     {
-        pthread_rwlock_rdlock(&hashmap->lock);
+        // pthread_rwlock_rdlock(&hashmap->lock);
         if (!strcmp(key, hashmap->contents[h]->key)) {
             pthread_rwlock_unlock(&hashmap->lock);
             return hashmap->contents[h]->value;
         }
 
         h++;
-        pthread_rwlock_unlock(&hashmap->lock);
+        // pthread_rwlock_unlock(&hashmap->lock);
 
         if (h == hashmap->capacity)
             h = 0;
 
         // pthread_rwlock_unlock(&hashmap->lock);
     }
+    pthread_rwlock_unlock(&hashmap->lock);
     return NULL;
 }
 
