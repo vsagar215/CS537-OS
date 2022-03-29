@@ -9,31 +9,26 @@
 #define FNV_OFFSET 14695981039346656037UL
 #define FNV_PRIME 1099511628211UL
 // pthread_mutex_t lock;
-pthread_rwlock_t lock;
 
 // No need to lock?
-HashMap *MapInit(void)
-{
+HashMap *MapInit(void) {
     HashMap *hashmap = (HashMap *)malloc(sizeof(HashMap));
     hashmap->contents = (MapPair **)calloc(MAP_INIT_CAPACITY, sizeof(MapPair *));
     hashmap->capacity = MAP_INIT_CAPACITY;
     hashmap->size = 0;
+    pthread_rwlock_init(&hashmap->lock, NULL);
     return hashmap;
 }
 
-void MapPut(HashMap *hashmap, char *key, void *value, int value_size)
-{
-    // pthread_mutex_lock(&lock);
+void MapPut(HashMap *hashmap, char *key, void *value, int value_size) {
     // lock this
-    // pthread_mutex_lock(&lock);
-    if (hashmap->size > (hashmap->capacity / 2))
-    {
+    // pthread_rwlock_wrlock(&hashmap->lock);
+    if (hashmap->size > (hashmap->capacity / 2)) {
         if (resize_map(hashmap) < 0)
-        {
             exit(0);
-        }
     }
-    // pthread_mutex_unlock(&lock);
+    // pthread_rwlock_unlock(&hashmap->lock);
+
     // No need to lock
     MapPair *newpair = (MapPair *)malloc(sizeof(MapPair));
     int h;
@@ -44,33 +39,28 @@ void MapPut(HashMap *hashmap, char *key, void *value, int value_size)
 
     h = Hash(key, hashmap->capacity);
     
-    while (hashmap->contents[h] != NULL)
-    {
+    while (hashmap->contents[h] != NULL) {
+
         // if lock the if and h incr
         // if keys are equal, update
-        // pthread_mutex_lock(&lock);
-        if (!strcmp(key, hashmap->contents[h]->key))
-        {
-            pthread_rwlock_rdlock(&lock);
+        if (!strcmp(key, hashmap->contents[h]->key)) {
+            pthread_rwlock_wrlock(&hashmap->lock);
             free(hashmap->contents[h]);
             hashmap->contents[h] = newpair;
-            pthread_rwlock_unlock(&lock);
+            pthread_rwlock_unlock(&hashmap->lock);
             return;
         }
         h++;
-        // pthread_mutex_unlock(&lock);
         if (h == hashmap->capacity)
             h = 0;
     }
 
     // lock this
     // key not found in hashmap, h is an empty slot
-    pthread_rwlock_rdlock(&lock);
-    // pthread_mutex_lock(&lock);
+    pthread_rwlock_wrlock(&hashmap->lock);
     hashmap->contents[h] = newpair;
     hashmap->size += 1;
-    // pthread_mutex_unlock(&lock);
-    pthread_rwlock_unlock(&lock);
+    pthread_rwlock_unlock(&hashmap->lock);
 }
 
 char *MapGet(HashMap *hashmap, char *key)
@@ -78,31 +68,28 @@ char *MapGet(HashMap *hashmap, char *key)
     int h = Hash(key, hashmap->capacity);
     while (hashmap->contents[h] != NULL)
     {
-    pthread_rwlock_wrlock(&lock);
-        // pthread_mutex_lock(&lock);
-        if (!strcmp(key, hashmap->contents[h]->key))
-        {
-            pthread_rwlock_unlock(&lock);
+        pthread_rwlock_rdlock(&hashmap->lock);
+        if (!strcmp(key, hashmap->contents[h]->key)) {
+            pthread_rwlock_unlock(&hashmap->lock);
             return hashmap->contents[h]->value;
         }
+
         h++;
-    pthread_rwlock_unlock(&lock);
-        // pthread_mutex_unlock(&lock);
+        pthread_rwlock_unlock(&hashmap->lock);
+
         if (h == hashmap->capacity)
-        {
             h = 0;
-        }
+
+        // pthread_rwlock_unlock(&hashmap->lock);
     }
     return NULL;
 }
 
-size_t MapSize(HashMap *map)
-{
+size_t MapSize(HashMap *map) {
     return map->size;
 }
 
-int resize_map(HashMap *map)
-{
+int resize_map(HashMap *map) {
     MapPair **temp;
     size_t newcapacity = map->capacity * 2; // double the capacity
 
