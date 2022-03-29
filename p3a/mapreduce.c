@@ -1,92 +1,75 @@
-#include <stdlib.h>
-#include <string.h>
 #include <stdio.h>
-#include <errno.h>
+#include <string.h>
+#include <stdlib.h>
 #include <pthread.h>
 #include "mapreduce.h"
 #include "hashmap.h"
+#include <sys/stat.h>
 
-// Simplifying fileName reading
-struct fileName{
-    char *name;
+// Globals and Structures
+pthread_mutex_t lock; 
+pthread_mutex_t file;
+const int BUCKET_SIZE = 5000;
+
+struct fileHelper {
+	char *name;
 };
 
-// Holding all important data structures
-struct Vars{
-    MapPair **dict; // dict holding array of KV pairs
-    struct fileName names; // Names of the files passed
-    int *partitionIter; // keeps track of next entry in partition
-    int *numOfPairs; // Number of KVs in a partition
-    int *pairAllocPartition;
-    int numOfPartitions; // Count of partitions
-    int numFilesProc; // Number of files processed by a thread
-    int totalFiles; // Total count of files
-}vars;
+struct CentralDataStructure{
+	MapPair **bucket;
+	int *numOfKVs;
+	int *pairAllocatedInPartition;
+	int *numberOfAccessInPartition;
+	int numberPartitions;
+	int filesProcessed;
+	int totalFiles;
+	struct fileHelper *fileNames;
+}cds;
 
-// MapPair** partitions;
+struct MapReduceFunctions{
+	Mapper map;
+	Reducer reduce;
+	Partitioner partition;
+}mrf;
 
-// Creating locks
-pthread_mutex_t genLock;
-pthread_mutex_t singleFileLock;
-
-// Creating data structure for MR_Run
-struct MRVars {
-    Mapper map;
-    Reducer reduce;
-    Getter get_func;
-    Partitioner partitioner;
-}mrVars;
-
-// List of Functions
+// Function Declarations
+void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
 void MR_Emit(char *key, char *value);
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions);
+void init_cds(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition, int *arrayPosition);
+int SFF(const void* p, const void* q);
+void *map_wrapper(void *ptr);
+int cmp(const void* p, const void* q);
 char *get_next(char *key, int partition_number);
-void *map_wrapper(void * ptr);
-void *reducer_wrapper(void *args);
-void MR_Run(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition);
-void thread_Mapping(void *arg);
-int pair_helper(const void *pair1, const void *pair2);
-int file_helper(const void *file1, const void *file2);
-
-int file_helper(const void *file1, const void *file2){
-    // (vars.names*) file1;
-    // int s1 = fseek(fp1, 0L, SEEK_END);
-    // int s2 = fseek(fp2, 0L, SEEK_END);
-    // fclose(fp1);
-    // fclose(fp2);
-    // return (s1 - s2);
-    return 0;
-}
-
-int pair_helper(const void *pair1, const void *pair2){
-
-    MapPair *u = (MapPair*) pair1;
-    MapPair *v = (MapPair*) pair2;
-
-    if(strcmp(u->key, v->key) == 0)
-        return strcmp(u->value, v->value);
-    return strcmp(u->key, v->key);
-}
+void *reducer_wrapper(void *ptr);
+void custodian();
 
 void MR_Emit(char *key, char *value) {
-    pthread_mutex_lock(&genLock);
-    unsigned long partitionNum = mrVars.partitioner(key, vars.numOfPartitions);
-    vars.numOfPairs[partitionNum]++;
-    int pairCount = vars.numOfPairs[partitionNum];
-    if(vars.dict[partitionNum] == NULL){
-          vars.dict[partitionNum] = malloc(1 * sizeof(MapPair *));
-    }
+	pthread_mutex_lock(&lock);			// Preventing incomplete memory reallocation
+	// Getting bucket corresponding to passed key
+	unsigned long hashPartitionNumber = mrf.partition(key, cds.numberPartitions);
+	int numOfKV = ++cds.numOfKVs[hashPartitionNumber]; // Getting updated number of KVs in given bucket
+	// If space in bucket, simply copy KVs
+	if(numOfKV <= cds.pairAllocatedInPartition[hashPartitionNumber]){
+		// Making space 
+		cds.bucket[hashPartitionNumber][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
+		cds.bucket[hashPartitionNumber][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
+	
+		// Storing keys and values
+		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].key, key);
+		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].value, value);
+	} else{ // Otherwise alloc space in bucket first
+		cds.pairAllocatedInPartition[hashPartitionNumber] *= 2; // double the size of bucket
+		cds.bucket[hashPartitionNumber] = (MapPair *) realloc(cds.bucket[hashPartitionNumber], cds.pairAllocatedInPartition[hashPartitionNumber] * sizeof(MapPair));
 
-    if (pairCount > vars.pairAllocPartition[partitionNum]) {
- 	    vars.numOfPairs[partitionNum] *= 2;
- 	    vars.dict[partitionNum] = (MapPair *) realloc(vars.dict[partitionNum], vars.numOfPairs[partitionNum] * sizeof(MapPair));
- 	}
+		cds.bucket[hashPartitionNumber][numOfKV - 1].key = (char *)malloc( (strlen(key) + 1) * sizeof(char));
+		cds.bucket[hashPartitionNumber][numOfKV - 1].value = (char *)malloc( (strlen(value) + 1) * sizeof(char));
 
-    vars.dict[partitionNum][pairCount - 1].key = (char*)malloc((strlen(key) + 1) * sizeof(char));
-    vars.dict[partitionNum][pairCount - 1].value = (char*)malloc((strlen(value) + 1) * sizeof(char));
-    strcpy(vars.dict[partitionNum][pairCount - 1].key, key);
-    strcpy(vars.dict[partitionNum][pairCount - 1].value, value);
-    pthread_mutex_unlock(&genLock);
+		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].key, key);
+		strcpy(cds.bucket[hashPartitionNumber][numOfKV - 1].value, value);
+	}
+
+	pthread_mutex_unlock(&lock); 
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
@@ -97,99 +80,173 @@ unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
     return hash % num_partitions;
 }
 
-char *get_next(char *key, int partition_number){
-    int i = vars.partitionIter[partition_number];
-    if(i > vars.numOfPairs[partition_number] || strcmp(key, vars.dict[partition_number][i].key) != 0)
-        return NULL;
+void MR_Run(int argc, char *argv[], 
+			Mapper map, int num_mappers, 
+			Reducer reduce, int num_reducers, 
+			Partitioner partition) 
+{	
+	/*STEP 1: Initialization*/
+	// Initializing locks and local vars 
+	pthread_mutex_init(&lock, NULL);
+	pthread_mutex_init(&file, NULL);
+	pthread_t mapperThreads[num_mappers];
+	pthread_t reducerThreads[num_reducers];
+	int arrayPosition[num_reducers];
+	int i;
 
-    vars.partitionIter[partition_number]++;
-    return vars.dict[partition_number][i].value;
+	// Initializing Central Data Structure and MapReduce Functions
+	init_cds(argc, argv, map, num_mappers, reduce, num_reducers, partition, arrayPosition);
+
+	// Sorting files by file size
+	qsort(&cds.fileNames[0], cds.totalFiles, sizeof(struct fileHelper), SFF);
+
+	/*STEP 2: Map*/
+	// Create mapping threads
+	for (i = 0; i < num_mappers; ++i) {
+		pthread_create(&mapperThreads[i], NULL, map_wrapper, NULL);
+	}
+	// Join mapping threads
+	for(i = 0; i < num_mappers; ++i) {
+		pthread_join(mapperThreads[i], NULL); 
+	}
+
+	/*STEP 3: Sorting*/
+	// Sort partitions
+	for(i = 0; i < cds.numberPartitions; ++i) {
+		qsort(cds.bucket[i], cds.numOfKVs[i], sizeof(MapPair), cmp);
+	}
+
+	/*STEP 4: Reduce*/
+	// Create reducing threads
+	for (i = 0; i < num_reducers; ++i){
+	    pthread_create(&reducerThreads[i], NULL, reducer_wrapper, &arrayPosition[i]);
+	}
+	// Join reducing threads
+	for(i = 0; i < num_reducers; ++i) {
+		pthread_join(reducerThreads[i], NULL); 
+	}
+
+	/*STEP 5: Cleanup*/
+	custodian();
 }
 
-void *map_wrapper(void * ptr) {
-    // TODO: Working under assumption that we have one file
-    // Add while loop if more than one file?
-    Mapper mapFunc = mrVars.map;
-    char *file_name = vars.names.name;
+// Initializes all fields with meaningful values
+void init_cds(int argc, char *argv[], Mapper map, int num_mappers, Reducer reduce, int num_reducers, Partitioner partition, int *arrayPosition){
+	
+	// Central Data Structure
+	cds.totalFiles = argc - 1;
+	cds.numberPartitions = num_reducers;
+	cds.bucket = malloc(cds.numberPartitions * sizeof(struct pairs*));
+	cds.fileNames = malloc((cds.totalFiles) * sizeof(struct fileHelper));
+	cds.numOfKVs = malloc(cds.numberPartitions * sizeof(int));
+	cds.pairAllocatedInPartition = malloc(cds.numberPartitions * sizeof(int));
+	cds.numberOfAccessInPartition = malloc(cds.numberPartitions * sizeof(int));
+	cds.filesProcessed = 0;
+	int i;
 
-    if(file_name != NULL)
-         mapFunc(file_name);
-    return NULL;
+	// MapReduce Functions
+	mrf.map = map;
+	mrf.reduce = reduce;
+	mrf.partition = partition;
+
+	// Initialising the arrays needed to store the key value pairs in the partitions
+	for(i = 0; i < num_reducers; i++) {
+		cds.bucket[i] = malloc(BUCKET_SIZE * sizeof(MapPair));
+		cds.numOfKVs[i] = 0;
+		cds.pairAllocatedInPartition[i] = BUCKET_SIZE;
+		arrayPosition[i] = i;
+		cds.numberOfAccessInPartition[i] = 0;
+	}
+
+	// Initializing file names
+	for(i = 0; i <cds.totalFiles; i++) {
+		cds.fileNames[i].name = malloc((strlen(argv[i+1])+1) * sizeof(char));
+		strcpy(cds.fileNames[i].name, argv[i+1]);
+	}
 }
 
-void *reducer_wrapper(void *args) {
-    // TODO: Add support for int array
-    int partitionNum = 0;
-    Reducer reduceFunc = mrVars.reduce;
-    int i;
-    for(i = 0; i < vars.numOfPairs[partitionNum]; ++i){
-        if(i == vars.partitionIter[partitionNum])
-            reduceFunc(vars.dict[partitionNum][i].key, get_next, partitionNum);
-    }
-    return NULL;
+// Using Shortest-File-First
+int SFF(const void* p, const void* q) {
+	struct fileHelper *a = (struct fileHelper*) p;
+	struct stat infoA;
+	stat(a->name, &infoA);
+	long int sizeOfA = infoA.st_size;
+	
+	struct fileHelper *b = (struct fileHelper*) q;
+	struct stat infoB;
+	stat(b->name, &infoB);
+	long int sizeOfB = infoB.st_size;
+	return (sizeOfA - sizeOfB);
 }
 
-void MR_Run(int argc, char *argv[],
-                Mapper map, int num_mappers,
-                Reducer reduce, int num_reducers,
-                Partitioner partition)
-{
-    /*STEP 1: Initialization*/
-    pthread_t mapping_threads[num_mappers];
-    pthread_t reducer_threads[num_reducers];
+// Sorting partition based on values and keys
+int cmp(const void* p, const void* q) {
+	MapPair *dictA = (MapPair *) p;
+	MapPair *dictB = (MapPair *) q;
+	
+	// if unique keys, only do 1 comparison
+	int keysRV = strcmp(dictA->key, dictB->key);
+	
+	if(0 == keysRV) // If same keys exist, also compare values
+		return strcmp(dictA->value, dictB->value);
+	
+	return keysRV;
+}
 
-    /*Init mrVars struct*/
-    mrVars.map = map;
-    mrVars.reduce = reduce;
-    mrVars.partitioner = partition==NULL? MR_DefaultHashPartition: partition;
+void *map_wrapper(void *ptr) {
+	// looping until total files mapped
+	while(cds.filesProcessed < cds.totalFiles) { 
+		// preventing incorrect counter update
+		pthread_mutex_lock(&file);					 
+		char *name = cds.fileNames[cds.filesProcessed].name;
+		cds.filesProcessed++;
+		pthread_mutex_unlock(&file);
+		if(name == NULL){
+			continue;
+		} else{
+			mrf.map(name);							// only map if valid file name
+		}
+	}
+	return ptr;
+}
 
-    /*Init Vars struct*/
-    vars.dict = malloc(num_reducers * sizeof(MapPair *));
-    vars.partitionIter  = malloc(num_reducers * sizeof(int));
-    vars.numOfPairs = malloc(num_reducers * sizeof(int));
-    vars.pairAllocPartition = malloc(num_reducers * sizeof(int));
-    vars.numOfPartitions = num_reducers;
-    vars.numFilesProc = 0;
-    vars.totalFiles = argc - 1;
-    vars.names.name = argv[1]; // TODO: ONLY WORKS FOR 1 FILE
+char *get_next(char *key, int partition_number) {
+	
+	int curr_KV = cds.numberOfAccessInPartition[partition_number];
+	// Reached end of bucket
+	if(curr_KV >= cds.numOfKVs[partition_number])
+		return NULL;
+	
+	// If key exists in the bucket, return value 
+	if(strcmp(key, cds.bucket[partition_number][curr_KV].key) == 0) {
+			cds.numberOfAccessInPartition[partition_number]++; 
+			return cds.bucket[partition_number][curr_KV].value;
+	}
 
-    // TODO: Sorting files RR or SJF?
-    // qsort(&vars.names, argc - 1, sizeof(fileName), file_helper);
+	return NULL;
+}
 
-    // STEP 2: MAP
-    int i;
-    for(i = 0; i < num_mappers; i++)
-        pthread_create(&mapping_threads[i], NULL, map_wrapper, NULL);
+void *reducer_wrapper(void *ptr) {
+	int *partitionNumber = (int *)ptr;
+	int i;
+	for(i = 0; i < cds.numOfKVs[*partitionNumber]; ++i) {
+		if(i == cds.numberOfAccessInPartition[*partitionNumber]) {
+			mrf.reduce(cds.bucket[*partitionNumber][i].key, get_next, *partitionNumber);
+		}
+	}
+	return ptr;
+}
 
-    // Wait on mapping_threads
-    int closed = -1;
-    for(int j = 0; j < num_mappers; ++j)
-        pthread_join(mapping_threads[i], NULL);
-
-        //printf("bool: %ld", mapping_threads[j]);
-    return;
-
-    // STEP 3: Sort
-    // Sort files
-
-    // Sort partitions
-	for(i = 0; i < num_reducers; ++i)
-		qsort(vars.dict[i], vars.numOfPairs[i], sizeof(MapPair), pair_helper);
-
-    // STEP 4: Reducer
-    for(i = 0; i < num_mappers; i++)
-        pthread_create(&reducer_threads[i], NULL, reducer_wrapper, NULL);
-
-    // Wait on reducer_threads
-    for(i = 0; i < num_mappers; i++)
-        pthread_join(reducer_threads[i], NULL);
-
-    // STEP 5: Freeing
-    free(vars.dict);
-    // int i;
-    // for(i = 0; i < argc - 1; ++i)
-    //     free(vars.names[i].name);
-    free(vars.names.name);
-    free(vars.partitionIter);
-    free(vars.numOfPairs);
+// Destroying locks and freeing memory
+void custodian(){
+	// Locks
+	pthread_mutex_destroy(&lock);
+	pthread_mutex_destroy(&file);
+	
+	// Central Data Structure
+	free(cds.bucket);
+	free(cds.numOfKVs);
+	free(cds.fileNames);
+	free(cds.pairAllocatedInPartition);
+	free(cds.numberOfAccessInPartition);
 }
