@@ -97,15 +97,15 @@ sys_clone(void)
     void (*fnc)(void *, void *);
     void *arg1, *arg2, *stack;
 
-    if(argptr(0, (void *)&fnc, sizeof(fnc) < 0))
+    if(argptr(0, (void *)&fnc, sizeof(fnc)) < 0)
         return -1;
-    if(argptr(0, (void *)&arg1, sizeof(arg1) < 0))
+    if(argptr(0, (void *)&arg1, sizeof(arg1)) < 0)
         return -1;
-    if(argptr(0, (void *)&arg2, sizeof(arg2) < 0))
+    if(argptr(0, (void *)&arg2, sizeof(arg2)) < 0)
         return -1;
-    if(argptr(0, (void *)&stack, sizeof(stack) < 0))
+    if(argptr(0, (void *)&stack, sizeof(stack)) < 0)
         return -1;
-    return clone(fnc, arg1, arg2, stack);
+    return clone((void*) fnc, arg1, arg2, stack);
 }
 
 int sys_join(void)
@@ -114,8 +114,8 @@ int sys_join(void)
 
     if(argptr(0, (void *)&stack, sizeof(stack) < 0))
         return -1;
-
-    return -1;
-    //return join(stack);
+        
+    //return -1;
+    return join(stack);
 
 }
