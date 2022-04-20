@@ -15,7 +15,8 @@ void clockInsert(uint vpn, pte_t *pte) {
 
     //queue not full
     int size = currProc->clock.size;
-    if(size < CLOCKSIZE && currProc->clock.queue[size].vpn == -1) {
+    //possible out of bounds seg fault
+    if(size < CLOCKSIZE && currProc->clock.queue[(size+1)].vpn == -1) {
         size++;
         currProc->clock.queue[size].vpn = vpn;
         currProc->clock.queue[size].pte = pte;
@@ -49,7 +50,18 @@ void clockInsert(uint vpn, pte_t *pte) {
 }
 
 void clockRemove(uint vpn) {
-    
+    struct proc *currProc = myproc();
+
+    /*find the page*/
+    for(int i = 0; i < CLOCKSIZE; ++i) {
+        if(currProc->clock.queue[i].vpn == vpn) {
+            mencrypt((char *)currProc->clock.queue[i].vpn,1);
+            currProc->clock.queue[i].vpn = -1;
+            size--;
+            return;
+        }
+    }
+    mencrypt((char *)currProc->clock.queue[i].vpn,1);
 }
 
 
