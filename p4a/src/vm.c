@@ -7,64 +7,6 @@
 #include "proc.h"
 #include "elf.h"
 
-
-/* Clock insert and remove */
-
-void clockInsert(uint vpn, pte_t *pte) {
-    struct proc *currProc = myproc();
-
-    //queue not full
-    int size = currProc->clock.size;
-    //possible out of bounds seg fault
-    if(size < CLOCKSIZE && currProc->clock.queue[(size+1)].vpn == -1) {
-        size++;
-        currProc->clock.queue[size].vpn = vpn;
-        currProc->clock.queue[size].pte = pte;
-        return;
-    }
-
-    //clock insert
-    while(1) {
-        //advance hand
-        currProc->clock.index = (currProc->clock.index+1) % CLOCKSIZE;
-        int hand = currProc->clock.index;
-
-        /* find slot to insert or evit page */
-        if(currProc->clock.queue[hand].vpn == -1) {
-            //insert the new page
-            currProc->clock.queue[hand].vpn = vpn;
-            currProc->clock.queue[hand].pte = pte;
-            break;
-        }
-        else if(!(*(currProc->clock.queue[hand].pte) & PTE_A)) {
-           // page does not have ref bit set, evict it 
-           // first encrypt it, then set new page into queue
-           mencrypt((char *)currProc->clock.queue[hand].vpn, 1);
-           currProc->clock.queue[hand].vpn = vpn;
-           currProc->clock.queue[hand].pte = pte;
-           break;
-        }
-        // clear ref bit
-        *(currProc->clock.queue[hand].pte) &= ~PTE_A;
-    }
-}
-
-void clockRemove(uint vpn) {
-    struct proc *currProc = myproc();
-
-    /*find the page*/
-    for(int i = 0; i < CLOCKSIZE; ++i) {
-        if(currProc->clock.queue[i].vpn == vpn) {
-            mencrypt((char *)currProc->clock.queue[i].vpn,1);
-            currProc->clock.queue[i].vpn = -1;
-            size--;
-            return;
-        }
-    }
-    mencrypt((char *)currProc->clock.queue[i].vpn,1);
-}
-
-
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
 
@@ -481,6 +423,7 @@ char* translate_and_set(pde_t *pgdir, char *uva) {
 
 
 int mdecrypt(char *virtual_addr) {
+  cprintf("DECRYPT ASDF");
   cprintf("p4Debug:  mdecrypt VPN %d, %p, pid %d\n", PPN(virtual_addr), virtual_addr, myproc()->pid);
   //p4Debug: virtual_addr is a virtual address in this PID's userspace.
   struct proc * p = myproc();
@@ -564,7 +507,7 @@ int mencrypt(char *virtual_addr, int len) {
   return 0;
 }
 
-int getpgtable(struct pt_entry* pt_entries, int num) {
+int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
   cprintf("p4Debug: getpgtable: %p, %d\n", pt_entries, num);
 
   struct proc *curproc = myproc();

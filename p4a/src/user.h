@@ -26,8 +26,8 @@ int sleep(int);
 int uptime(void);
 //changed: added syscall decl
 int mencrypt(char *virtual_addr, int len);
-int getpgtable(struct pt_entry* entries, int num);
-int dump_rawphymem(char *physical_addr, char * buffer);
+int getpgtable(struct pt_entry* entries, int num, int wsetOnly);
+int dump_rawphymem(uint physical_addr, char * buffer);
 
 // ulib.c
 int stat(const char*, struct stat*);

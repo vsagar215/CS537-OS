@@ -101,12 +101,6 @@ exec(char *path, char **argv)
   curproc->tf->esp = sp;
   switchuvm(curproc);
   freevm(oldpgdir);
-
-
-  /*resetting process queue*/
-  curproc->clock.index = -1;
-  for(int i = 0; i < CLOCKSIZE; i++) curproc->clock.queue[i].vpn = -1;
-
   return 0;
 
  bad:
