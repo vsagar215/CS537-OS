@@ -6,6 +6,90 @@
 #include "mmu.h"
 #include "proc.h"
 #include "elf.h"
+static pte_t * walkpgdir(pde_t *pgdir, const void *va, int alloc);
+
+
+/* Clock insert and remove */
+
+void clockInsert(char *virt_addr, pte_t *pte) {
+    cprintf("INSERT iiii: %p\n", pte);
+    struct proc *currProc = myproc();
+
+    //queue not full
+    /*
+    int size = currProc->clock.size;
+    //possible out of bounds seg fault
+    if(size < CLOCKSIZE && currProc->clock.queue[(size+1)].virt_addr == 0) {
+        size = currProc->clock.size;
+        currProc->clock.queue[size].virt_addr = virt_addr;
+        currProc->clock.queue[size].pte = pte;
+        //cprintf("INSERT 2  curr: %d size: %d\n", currProc->clock.size,size);
+        currProc->clock.size++;
+        return;
+    }
+    */
+
+    //clock insert
+    while(1) {
+        //advance hand
+        currProc->clock.index = (currProc->clock.index+1) % CLOCKSIZE;
+        int hand = currProc->clock.index;
+
+        /* find slot to insert or evit page */
+        if(currProc->clock.queue[hand].virt_addr == 0) {
+            //insert the new page
+            currProc->clock.queue[hand].virt_addr = virt_addr;
+            //currProc->clock.queue[hand].pte = pte;
+            currProc->clock.queue[hand].pte = walkpgdir(currProc->pgdir, virt_addr, 0);
+            currProc->clock.size++;
+          //  *(currProc->clock.queue[hand].pte) &= ~PTE_A; // TODO: Check if passes? NOPE
+            cprintf("virt_addr: %p, pte: %p\n",virt_addr, pte);
+            cprintf("size jjjj: %d\n", currProc->clock.size);
+            cprintf("pte  pppp: %p\n", pte);
+           *(currProc->clock.queue[hand].pte) &= ~PTE_A;
+            break;
+        }
+        else if(!(*(currProc->clock.queue[hand].pte) & PTE_A)) {
+           // page does not have ref bit set, evict it 
+           // first encrypt it, then set new page into queue
+           *(currProc->clock.queue[hand].pte) &= ~PTE_A; 
+           mencrypt((char *)currProc->clock.queue[hand].virt_addr, 1);
+           currProc->clock.queue[hand].virt_addr = virt_addr;
+           currProc->clock.queue[hand].pte = pte;
+           *(currProc->clock.queue[hand].pte) &= ~PTE_A;
+           break;
+        }
+        // clear ref bit
+        *(currProc->clock.queue[hand].pte) &= ~PTE_A;
+    }
+}
+
+void clockRemove(char *virt_addr) {
+    struct proc *currProc = myproc();
+
+    /*find the page*/
+    for(int i = 0; i < CLOCKSIZE; ++i) {
+        if(currProc->clock.queue[i].virt_addr == virt_addr) {
+            mencrypt((char *)currProc->clock.queue[i].virt_addr,1);
+            currProc->clock.queue[i].virt_addr = 0;
+            currProc->clock.size--;
+            return;
+        }
+    }
+    //mencrypt((char *)currProc->clock.queue[i].vpn,1);
+}
+
+int inClock(pte_t *pte) {
+    //struct proc *p = myproc();
+    struct proc *currProc = myproc();
+    int i = 0;
+    for(; i < CLOCKSIZE; ++i) {
+        if(currProc->clock.queue[i].pte == pte)
+            return 1;
+    }
+    return 0;
+}
+
 
 extern char data[];  // defined by kernel.ld
 pde_t *kpgdir;  // for use in scheduler()
@@ -423,7 +507,6 @@ char* translate_and_set(pde_t *pgdir, char *uva) {
 
 
 int mdecrypt(char *virtual_addr) {
-  cprintf("DECRYPT ASDF");
   cprintf("p4Debug:  mdecrypt VPN %d, %p, pid %d\n", PPN(virtual_addr), virtual_addr, myproc()->pid);
   //p4Debug: virtual_addr is a virtual address in this PID's userspace.
   struct proc * p = myproc();
@@ -452,6 +535,9 @@ int mdecrypt(char *virtual_addr) {
     *slider = *slider ^ 0xFF;
     slider++;
   }
+  clockInsert(virtual_addr, pte);
+  // *pte = *pte & ~PTE_A; // TODO: pass?
+  switchuvm(p); //ta said to do this, but not sure why
   return 0;
 }
 
@@ -501,6 +587,9 @@ int mencrypt(char *virtual_addr, int len) {
       cprintf("p4Debug: translate failed!");
       return -1;
     }
+    *mypte = *mypte | PTE_E;
+    *mypte = *mypte & ~PTE_P;
+    *mypte = *mypte & ~PTE_A;
   }
 
   switchuvm(myproc());
@@ -521,8 +610,14 @@ int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
   int i = 0;
   for (;;uva -=PGSIZE)
   {
-    
     pte_t *pte = walkpgdir(pgdir, (const void *)uva, 0);
+    // cprintf("pte:%p\n", pte);
+    //check the bits? virtual addresses are easier to work with
+    // (*pte & PTE_A/P) *pte&PTE_E || !(*pte & PTE_P)
+    if (wsetOnly && !inClock(pte)) {
+        continue;
+    }
+    // cprintf("pte asdf: %p\n", pte);
 
     if (!(*pte & PTE_U) || !(*pte & (PTE_P | PTE_E)))
       continue;
@@ -533,7 +628,9 @@ int getpgtable(struct pt_entry* pt_entries, int num, int wsetOnly) {
     pt_entries[i].present = *pte & PTE_P;
     pt_entries[i].writable = (*pte & PTE_W) > 0;
     pt_entries[i].encrypted = (*pte & PTE_E) > 0;
+    // cprintf("ref bit (before): %d\n", pt_entries[i].ref);
     pt_entries[i].ref = (*pte & PTE_A) > 0;
+    // cprintf("ref bit (after): %d\n", pt_entries[i].ref);
     //PT_A flag needs to be modified as per clock algo.
     i ++;
     if (uva == 0 || i == num) break;

@@ -99,8 +99,27 @@ exec(char *path, char **argv)
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
+
+  curproc->clock.index = -1;
+  for(int i = 0; i < CLOCKSIZE; i++) curproc->clock.queue[i].virt_addr = 0;
+
+
   switchuvm(curproc);
+
+  mencrypt(0, (sz-2*PGSIZE)/PGSIZE);
+  mencrypt((char *)(sz-PGSIZE), 1);
   freevm(oldpgdir);
+
+  // mencrypt(0, (sz-2*PGSIZE)/PGSIZE);
+  // mencrypt((char *)(sz-PGSIZE), 1);
+
+  //mencrypt( curproc, (char*)0, (char *) curproc->sz)
+
+  /*resetting process queue*/
+  // curproc->clock.index = -1;
+  // for(int i = 0; i < CLOCKSIZE; i++) curproc->clock.queue[i].virt_addr = 0;
+
+
   return 0;
 
  bad:

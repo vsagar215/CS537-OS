@@ -1,3 +1,4 @@
+
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
@@ -10,20 +11,19 @@ struct cpu {
   struct proc *proc;           // The process running on this cpu or null
 };
 
-extern struct cpu cpus[NCPU];
-extern int ncpu;
-
 typedef struct clockelem_t {
-    void *virt_addr;
+    char *virt_addr;
     pte_t *pte;
 } clockelem;
 
-typedef struct clockdef_t {
-    clockelem array;
-    int size;
-    int index;
-} clockdef;
+typedef struct clockstruct_t {
+   clockelem queue[CLOCKSIZE];
+   int index; //"hand" of clock
+   int size;
+} clockstruct;
 
+extern struct cpu cpus[NCPU];
+extern int ncpu;
 
 //PAGEBREAK: 17
 // Saved registers for kernel context switches.
@@ -61,7 +61,7 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  clockdef clock;
+  clockstruct clock;
 };
 
 // Process memory is laid out contiguously, low addresses first:

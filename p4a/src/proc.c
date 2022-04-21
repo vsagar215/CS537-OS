@@ -6,6 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
+#include "ptentry.h"
 
 struct {
   struct spinlock lock;
@@ -112,6 +113,11 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  /*init clock*/
+  p->clock.index = -1;
+  p->clock.size  = 0;
+  for(int i = 0; i < CLOCKSIZE; i++)
+    p->clock.queue[i].virt_addr = 0;
   return p;
 }
 
@@ -163,9 +169,12 @@ growproc(int n)
 
   sz = curproc->sz;
   if(n > 0){
+    //add to clock (enque)
     if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
+    mencrypt((char *)curproc->sz, n/PGSIZE);
   } else if(n < 0){
+    //remove page from clock (deque)
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
   }
@@ -199,6 +208,20 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   *np->tf = *curproc->tf;
+
+  /*creating new clock, and deep copy parent's clock*/
+  //newClock: np->clock.queue[i]
+  cprintf("FORK FFFFFFFFF\n");
+  /*Commendted out*/
+  for(int i = 0; i < CLOCKSIZE; i++) {
+    np->clock.queue[i].virt_addr = curproc->clock.queue[i].virt_addr;
+    //might need to walk page dir
+    cprintf("virt_addr: %p pte: %p\n", curproc->clock.queue[i].virt_addr, curproc->clock.queue[i].pte);
+    //np->clock.queue[i].pte = curproc->clock.queue[i].pte;
+    //np->clock.queue[i].pte = walkpgdir(np->pgdir, (char *)curproc->clock.queue[i].vpn, 0);
+  }
+  np->clock.size = curproc->clock.size;
+  np->clock.index = curproc->clock.index;
 
   // Clear %eax so that fork returns 0 in the child.
   np->tf->eax = 0;
