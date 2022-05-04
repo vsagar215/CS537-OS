@@ -36,21 +36,59 @@ int main(int argc, char **argv) {
     for (unsigned int i = 0; i < inodes_per_block; i++) {
             printf("inode %u: \n", i);
             struct ext2_inode *inode = malloc(sizeof(struct ext2_inode));
+			int isReg= -1;
+			int isDir=-1;
+			char buffer[1024];
             read_inode(fd, 0, start_inode_table, i, inode);
 	    /* the maximum index of the i_block array should be computed from i_blocks / ((1024<<s_log_block_size)/512)
 			 * or once simplified, i_blocks/(2<<s_log_block_size)
 			 * https://www.nongnu.org/ext2-doc/ext2.html#i-blocks
 			 */
 			unsigned int i_blocks = inode->i_blocks/(2<<super.s_log_block_size);
-            printf("number of blocks %u\n", i_blocks);
+            
+            isReg = S_ISREG(inode->i_mode) ?1 :0;
+            isDir = S_ISDIR(inode->i_mode) ?1 :0;
+
+			printf("number of blocks %u\n", i_blocks);
              printf("Is directory? %s \n Is Regular file? %s\n",
-                S_ISDIR(inode->i_mode) ? "true" : "false",
-                S_ISREG(inode->i_mode) ? "true" : "false");
-			
+                isDir ? "true" : "false",
+                isReg ? "true" : "false");
+
 			// print i_block numberss
 			for(unsigned int i=0; i<EXT2_N_BLOCKS; i++)
-			{       if (i < EXT2_NDIR_BLOCKS)                                 /* direct blocks */
+			{
+						int is_jpg = 0;
+				       if (i < EXT2_NDIR_BLOCKS) {                                 /* direct blocks */
 							printf("Block %2u : %u\n", i, inode->i_block[i]);
+							if(!(inode->i_block[i])) {
+
+								//check if a regular & if jpg
+								if(isReg == 1){
+									lseek(fd, BLOCK_OFFSET(inode->i_block[0]), SEEK_SET);
+									read(fd, buffer, sizeof(buffer));
+									if (buffer[0] == (char)0xff &&
+									buffer[1] == (char)0xd8 &&
+									buffer[2] == (char)0xff &&
+									(buffer[3] == (char)0xe0 ||
+									buffer[3] == (char)0xe1 ||
+									buffer[3] == (char)0xe8)) {
+										is_jpg = 1;
+									}
+								}
+								is_jpg =is_jpg;
+								printf("-------------------is it a jpeg??\t%d-------------------\n", is_jpg);
+								
+								// if (buffer[0] == (char)0xff &&
+								// 	buffer[1] == (char)0xd8 &&
+								// 	buffer[2] == (char)0xff &&
+								// 	(buffer[3] == (char)0xe0 ||
+								// 	buffer[3] == (char)0xe1 ||
+								// 	buffer[3] == (char)0xe8)) {
+								// 		is_jpg = 1;
+								// }
+
+							}
+					}
 					else if (i == EXT2_IND_BLOCK)                             /* single indirect block */
 							printf("Single   : %u\n", inode->i_block[i]);
 					else if (i == EXT2_DIND_BLOCK)                            /* double indirect block */
