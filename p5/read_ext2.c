@@ -212,8 +212,9 @@ void read_inode(fd, ngroup, offset, inode_no, inode)
      int                            inode_no;  /* the inode number to read  */
      struct ext2_inode             *inode;     /* where to put the inode */
 {
-        lseek(fd, BLOCK_OFFSET(blocks_per_group * ngroup) + offset + (inode_no-1)*sizeof(struct ext2_inode), SEEK_SET);
+        lseek(fd, offset + (inode_no-1)*sizeof(struct ext2_inode), SEEK_SET);
         read(fd, inode, sizeof(struct ext2_inode));
+		ngroup=ngroup;
 }
 
 
