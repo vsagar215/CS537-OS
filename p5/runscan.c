@@ -13,7 +13,6 @@ void handle_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i
 	// Returning if empty block or a dir
 	char buffer[1024];
 	char inode_name[537];
-	// char file_name[537];
 
 	if(inode->i_block[i] == 0 || isReg != 1) return; 
 
@@ -34,26 +33,44 @@ void handle_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i
 	// If the file is not a JPG
 	if(is_jpg != 1) return;
 	
-	// // ---- DEBUG OUTPUT ---- 
-	// printf("----------------------\n");
-	// printf("------is_jpeg: %d------\n", is_jpg);
-	// printf("----------------------\n");
-	// lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
-	// figure out how to write to file
-	// char *file_name = "file-\0";
-	// // ---- DEBUG OUTPUT ---- 
-	
 	sprintf(inode_name, "%s/%s%d%s", dir_name, "file-", inode_num, ".jpg"); 
 	// sprintf(file_name, "%s/%s", dir_name, "a.jpg"); // TODO: Remove hard coding and retrieve filename
-	int file_i = open(inode_name, O_CREAT, 0666); // TODO: Assert fp is not null??
-	// int file_n = open(file_name, O_CREAT, 0666);
+	int file_i = open(inode_name, O_CREAT | O_TRUNC | O_WRONLY, 0666); // TODO: Assert fp is not null??
 	// TODO: Check why file empty
-	write(file_i, buffer, sizeof(buffer)); 
-	// write(file_n, buffer, sizeof(buffer));
-	close(file_i);
-	// close(file_n);
+	// int byte_read = write(file_i, buffer, sizeof(buffer)); 
 
-	// printf("size of inode: %d\n", inode->i_size);
+	// printf("file size: %d\n", inode->i_size);
+
+	int num_blocks = inode->i_size / sizeof(buffer);
+	
+	if(num_blocks == 0){
+		printf("INSIDE\n");
+		// for(int b = 0; b < (int) inode->i_size; ++b)
+			// write(file_i, buffer, sizeof(buffer));
+			write(file_i, buffer, inode->i_size);
+	}
+
+	// // Write out full blocks
+	// for(int j = 0; j < num_blocks; ++j){
+	// 	write(file_i, buffer, sizeof(buffer));
+	// }
+	
+	// int bytes_left = inode->i_size - 1024 * num_blocks;
+
+	// if()
+	
+	// // int j = 0;
+	// // If the last block, write less: only upto the filesize
+	// // if(isLast == 0) {
+	// // 	while(j < inode->i_size){
+
+	// // 	}
+	// // }
+
+	printf("num_blocks: %d\n", num_blocks);
+
+	// if not, write out entire block 
+	close(file_i);
 }
 
 /*
@@ -68,7 +85,6 @@ void handle_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i
 void handle_s_in_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i, int fd, int dir_fd) {
 	char buffer[1024];
 	if(inode->i_block[i] == 0) return;// || isReg != 1) return; 
-	
 	
 	dir_fd=dir_fd;
 	isReg=isReg;
