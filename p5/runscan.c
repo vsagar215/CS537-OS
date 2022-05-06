@@ -7,61 +7,32 @@
 
 // Track inode number
 int inode_num = -999;
+// int foobar = 0;
 
-// TODO: seek, read, then write
 void handle_direct_blocks(int block_addr, int size, int fd, int file_i) {
-	
-	char buffer[1024];
 
+	char buffer[1024];
 	// Returning if empty block
 	if(block_addr == 0) return;
 	
 	// Seeking to the correct data block
 	lseek(fd, BLOCK_OFFSET(block_addr), SEEK_SET);
-	read(fd, buffer, 1024);
-	
-	int num_blocks = size / sizeof(buffer);
-	int written = 0;
-	
-	if(num_blocks == 0){
-		written += write(file_i, buffer, size);
-		return;
-	}
-
-	// Write out full blocks
-	for(int j = 0; j < num_blocks; ++j) written += write(file_i, buffer, sizeof(buffer));
-
-	// if there are extra bytes that need to be written (ie, we use a partial block)
-	int bytes_left = size - 1024 * num_blocks;
-	lseek(fd, BLOCK_OFFSET(block_addr + 1024*num_blocks), SEEK_SET);
-	if(bytes_left != 0) write(file_i, buffer, bytes_left);
+	read(fd, buffer, size);
+	write(file_i, buffer, size);
 }
 
-/*
-	enter the indirection
-	iterate through indirection until null (offset by 4)
-	add the data at each pointer into buffer
-
-	do the jpg check
-*/
-
 // Call back direct block from within indirection
-void handle_s_in_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i, int fd, char dir_name[537]) {
-
-	is_jpg=is_jpg;
-	isReg=isReg;
-	dir_name=dir_name;
-
+void handle_s_in_direct_blocks(int block_addr, int size, int fd, int file_i){ //, struct ext2_inode *inode, int is_jpg, int isReg, int i, int fd, char dir_name[537]) {
+	
 	int ind_buffer[256]; // buffer ind block as an int
 	
 	// Read indirect block
-	lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
+	lseek(fd, BLOCK_OFFSET(block_addr), SEEK_SET);
 	read(fd, ind_buffer, sizeof(ind_buffer));
 
 	// Read pointers from indirect block
 	for (unsigned int i = 0; i < 256; ++i){
-		continue;
-		// handle_direct_blocks(ind_buffer[i], inode->i_size, is_jpg, isReg, fd, dir_name);
+		handle_direct_blocks(ind_buffer[i], size, fd, file_i);//is_jpg, isReg, fd, dir_name);
 	}
 }
 
@@ -183,23 +154,30 @@ int main(int argc, char **argv) {
 			// Create and open file
 			sprintf(inode_name, "%s/%s%d%s", dir_name, "file-", inode_num, ".jpg");
 			int file_i = open(inode_name, O_CREAT | O_TRUNC | O_WRONLY, 0666); // TODO: Assert fp is not null?
-
+			
+			// how many blocks to read
+			int num_blocks = inode->i_size / 1024;
+			int bytes_left = inode->i_size % 1024;
+			
 			for(unsigned int i=0; i<EXT2_N_BLOCKS; i++)
 			{
-				// char jpg_buffer[1024];
-				// int is_jpg = 0;
-				// char inode_name[537];
-				// Skip if not jpg
-				// if(is_jpg != 1) continue;
-
+				// TODO: LATER Check if file spans just direct or direct and indirect blocks 
 				if (i < EXT2_NDIR_BLOCKS) {                                 /* direct blocks */
-					printf("Block %2u : %u\n", i, inode->i_block[i]);
-					handle_direct_blocks((int) inode->i_block[i], (int) inode->i_size, fd, file_i);
+					printf("Block %2u : %u\n", i, inode->i_block[i]);				
+					if(num_blocks > 0){
+						handle_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
+					} else{
+						// foobar = bytes_left;
+						handle_direct_blocks((int) inode->i_block[i], bytes_left, fd, file_i);
+					}
 				}
 				else if (i == EXT2_IND_BLOCK){
 					printf("Single   : %u size: %d\n", inode->i_block[i], inode->i_size); 			/* single indirect block */
-					handle_s_in_direct_blocks(inode, is_jpg, isReg, i, fd, dir_name);
-
+					// handle_s_in_direct_blocks(inode, is_jpg, isReg, i, fd, dir_name);
+					if(num_blocks > 0)
+						handle_s_in_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
+					else
+						handle_s_in_direct_blocks((int) inode->i_block[i], bytes_left, fd, file_i);
 				}                             
 				else if (i == EXT2_DIND_BLOCK){                             /* double indirect block */
 					printf("Double   : %u\n", inode->i_block[i]);
@@ -208,10 +186,12 @@ int main(int argc, char **argv) {
 				else if (i == EXT2_TIND_BLOCK){                            	/* triple indirect block */
 					printf("Triple   : %u\n", inode->i_block[i]);
 				}
+				num_blocks--;
 			}
 			close(file_i); // TODO: Move it
 			free(inode);
 		}
 	}
 	close(fd);
+	// printf("Bytes Left: %d\n", foobar);
 }
