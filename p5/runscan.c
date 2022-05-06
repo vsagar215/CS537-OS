@@ -134,6 +134,7 @@ int main(int argc, char **argv) {
 			// how many blocks to read
 			int num_blocks = inode->i_size / 1024;
 			int bytes_left = inode->i_size % 1024;
+			int total_bytes = inode->i_size; total_bytes=total_bytes;
 			
 			for(unsigned int i=0; i<EXT2_N_BLOCKS; i++)
 			{
@@ -148,11 +149,11 @@ int main(int argc, char **argv) {
 				}
 				else if (i == EXT2_IND_BLOCK){
 					printf("Single   : %u size: %d\n", inode->i_block[i], inode->i_size); 			/* single indirect block */
-					// handle_s_in_direct_blocks(inode, is_jpg, isReg, i, fd, dir_name);
 					if(num_blocks > 0)
 						handle_s_in_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
 					else
 						handle_s_in_direct_blocks((int) inode->i_block[i], bytes_left, fd, file_i);
+				num_blocks--;
 				}                             
 				else if (i == EXT2_DIND_BLOCK){                             /* double indirect block */
 					printf("Double   : %u\n", inode->i_block[i]);
