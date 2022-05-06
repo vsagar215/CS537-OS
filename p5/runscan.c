@@ -8,16 +8,17 @@
 // Track inode number
 int inode_num = -999;
 
-void handle_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i, int fd, char dir_name[537]) {
-
+void handle_direct_blocks(int block_addr, int size, int is_jpg, int isReg, int fd, char dir_name[537]) {
 	// Returning if empty block or a dir
 	char buffer[1024];
 	char inode_name[537];
 
-	if(inode->i_block[i] == 0 || isReg != 1) return; 
+	// if(inode->i_block[i] == 0 || isReg != 1) return; 
+	if(block_addr == 0 || isReg != 1) return; 
 
 	// Seeking to the correct data block
-	lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET); // TODO: Fix for only size of file, not entire block
+	// lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET); // TODO: Fix for only size of file, not entire block
+	lseek(fd, BLOCK_OFFSET(block_addr), SEEK_SET); // TODO: Fix for only size of file, not entire block
 	read(fd, buffer, 1024);
 
 	// Checking if first block has JPG magic numbers
@@ -41,31 +42,38 @@ void handle_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i
 
 	// printf("file size: %d\n", inode->i_size);
 
-	int num_blocks = inode->i_size / sizeof(buffer);
+	// int num_blocks = inode->i_size / sizeof(buffer);
+	int num_blocks = size / sizeof(buffer);
+	int written = 0;
 	
 	if(num_blocks == 0){
 		printf("INSIDE\n");
 		// for(int b = 0; b < (int) inode->i_size; ++b)
 			// write(file_i, buffer, sizeof(buffer));
-			write(file_i, buffer, inode->i_size);
+		// written += write(file_i, buffer, inode->i_size);
+		written += write(file_i, buffer, size);
+		return;
 	}
 
-	// // Write out full blocks
-	// for(int j = 0; j < num_blocks; ++j){
-	// 	write(file_i, buffer, sizeof(buffer));
-	// }
+	// Write out full blocks
+	for(int j = 0; j < num_blocks; ++j) written += write(file_i, buffer, sizeof(buffer));
 	
+	//if there are extra bytes that need to be written (ie, we use a partial block)
 	// int bytes_left = inode->i_size - 1024 * num_blocks;
-
-	// if()
+	int bytes_left = size - 1024 * num_blocks;
 	
-	// // int j = 0;
-	// // If the last block, write less: only upto the filesize
-	// // if(isLast == 0) {
-	// // 	while(j < inode->i_size){
-
-	// // 	}
-	// // }
+	// // DEBUG OUTPUT
+	// printf("------------------------------------------------\n");
+	// printf("file size: %u \n", inode->i_size);
+	// printf("num_blocks: %d\n", num_blocks);
+	// printf("bytes left: %d \n", bytes_left);
+	// printf("bytes written: %d\n", written);
+	// printf("------------------------------------------------\n");
+	// // DEBUG OUTPUT
+	
+	// lseek(fd, BLOCK_OFFSET(inode->i_block[i]+1024*num_blocks), SEEK_SET);
+	lseek(fd, BLOCK_OFFSET(block_addr+1024*num_blocks), SEEK_SET);
+	if(bytes_left != 0) write(file_i, buffer, bytes_left);
 
 	printf("num_blocks: %d\n", num_blocks);
 
@@ -82,43 +90,37 @@ void handle_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i
 */
 
 // Call back direct block from within indirection
-void handle_s_in_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i, int fd, int dir_fd) {
-	char buffer[1024];
-	if(inode->i_block[i] == 0) return;// || isReg != 1) return; 
-	
-	dir_fd=dir_fd;
-	isReg=isReg;
-	
+void handle_s_in_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i, int fd, char dir_name[537]) {
+
 	int ind_buffer[256]; // buffer ind block as an int
 	
 	// Read indirect block
 	lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
 	read(fd, ind_buffer, sizeof(ind_buffer));
-	// printf("DEBUG %ld\n", sizeof(*ind_buffer));
 
 	// Read pointers from indirect block
 	// loop over the int buffer
-	for (unsigned int i = 0; i<256; ++i){
+	for (unsigned int i = 0; i < 256; ++i){
 
-		// Read data for every 4th offset
-		lseek(fd, BLOCK_OFFSET(ind_buffer[i * 4]), SEEK_SET);
-		read(fd, buffer, 1024);
-		
-		// Perform jpg check
-		if (buffer[0] == (char)0xff &&
-			buffer[1] == (char)0xd8 &&
-			buffer[2] == (char)0xff &&
-			(buffer[3] == (char)0xe0 ||
-			buffer[3] == (char)0xe1 ||
-			buffer[3] == (char)0xe8)) {
-				is_jpg = 1;
-		}
-		is_jpg=is_jpg;
-		// printf("----------------------\n");
-		// printf("------is_jpeg: %d------\n", is_jpg);
-		// printf("----------------------\n");
+		handle_direct_blocks(ind_buffer[i], inode->i_size, is_jpg, isReg, fd, dir_name);
+
+		// lseek(fd, BLOCK_OFFSET(ind_buffer[i * 4]), SEEK_SET);
+		// read(fd, buffer, 1024);
+
+		// // Perform jpg check
+		// if (buffer[0] == (char)0xff &&
+		// 	buffer[1] == (char)0xd8 &&
+		// 	buffer[2] == (char)0xff &&
+		// 	(buffer[3] == (char)0xe0 ||
+		// 	buffer[3] == (char)0xe1 ||
+		// 	buffer[3] == (char)0xe8)) {
+		// 		is_jpg = 1;
+		// }
+		// is_jpg=is_jpg;
+		// // printf("----------------------\n");
+		// // printf("------is_jpeg: %d------\n", is_jpg);
+		// // printf("----------------------\n");
 	}
-
 }
 
 void handle_d_in_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i, int fd) {
@@ -191,7 +193,8 @@ int main(int argc, char **argv) {
 	off_t start_inode_table = locate_inode_table(0, &group);
 	printf("DEBUG inodes per block: %d\n", inodes_per_block);
 	inode_num = -1;
-    for (unsigned int i = 0; i < 15; i++) { // TODO: num_groups * inodes_per_group
+    // for (unsigned int i = 0; i < num_groups * inodes_per_group; i++) { // TODO: Is this correct?
+    for (unsigned int i = 0; i < 15; i++) { // TODO: Is this correct?
 			inode_num++;
 			printf("inode %u: \n", i);
             struct ext2_inode *inode = malloc(sizeof(struct ext2_inode));
@@ -219,11 +222,14 @@ int main(int argc, char **argv) {
 					int is_jpg = 0;
 				    if (i < EXT2_NDIR_BLOCKS) {                                 /* direct blocks */
 						printf("Block %2u : %u\n", i, inode->i_block[i]);
-						handle_direct_blocks(inode, is_jpg, isReg, i, fd, dir_name);
+						// if(inode->i_links_count == 0 && isReg) printf("-------- DELETED ---------\n");
+						// handle_direct_blocks(inode, is_jpg, isReg, i, fd, dir_name);
+						handle_direct_blocks((int) inode->i_block[i], (int) inode->i_size, is_jpg, isReg, fd, dir_name);
 					}
 					else if (i == EXT2_IND_BLOCK){
-						printf("Single   : %u\n", inode->i_block[i]); 			/* single indirect block */
-						handle_s_in_direct_blocks(inode, is_jpg, isReg, i, fd, dir_fd);
+						printf("Single   : %u size: %d\n", inode->i_block[i], inode->i_size); 			/* single indirect block */
+						handle_s_in_direct_blocks(inode, is_jpg, isReg, i, fd, dir_name);
+
 					}                             
 					else if (i == EXT2_DIND_BLOCK){                             /* double indirect block */
 						printf("Double   : %u\n", inode->i_block[i]);
@@ -232,7 +238,6 @@ int main(int argc, char **argv) {
 					else if (i == EXT2_TIND_BLOCK){                            	/* triple indirect block */
 						printf("Triple   : %u\n", inode->i_block[i]);
 					}
-
 			}
 			
             free(inode);
