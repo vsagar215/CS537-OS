@@ -22,7 +22,7 @@ void handle_direct_blocks(int block_addr, int size, int fd, int file_i) {
 }
 
 // Call back direct block from within indirection
-void handle_s_in_direct_blocks(int block_addr, int size, int fd, int file_i){ //, struct ext2_inode *inode, int is_jpg, int isReg, int i, int fd, char dir_name[537]) {
+void handle_s_in_direct_blocks(int block_addr, int size, int fd, int file_i){
 	
 	int ind_buffer[256]; // buffer ind block as an int
 	
@@ -32,46 +32,22 @@ void handle_s_in_direct_blocks(int block_addr, int size, int fd, int file_i){ //
 
 	// Read pointers from indirect block
 	for (unsigned int i = 0; i < 256; ++i){
-		handle_direct_blocks(ind_buffer[i], size, fd, file_i);//is_jpg, isReg, fd, dir_name);
+		handle_direct_blocks(ind_buffer[i], size, fd, file_i);
 	}
 }
 
 // TODO: Rewrite to call single indirect block handler
-void handle_d_in_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i, int fd) {
-	char buffer[1024];
-	if(inode->i_block[i] == 0 || isReg != 1) return; 
-	char ind_buffer_1[1024]; // 1st buffer ind block
-	char ind_buffer_2[1024]; // 2nd buffer ind block
+void handle_d_in_direct_blocks(int block_addr, int size, int fd, int file_i) {
+	
+	int sec_ind_buffer[256]; // buffer ind block as an int
 	
 	// Read indirect block
-	lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
-	read(fd, ind_buffer_1, sizeof(*ind_buffer_1));
+	lseek(fd, BLOCK_OFFSET(block_addr), SEEK_SET);
+	read(fd, sec_ind_buffer, sizeof(sec_ind_buffer));
 
 	// Read pointers from indirect block
-	for (unsigned int i = 0; i<256; ++i){
-		// Read pointer to nested indirection
-		lseek(fd, BLOCK_OFFSET(ind_buffer_1[i * 4]), SEEK_SET);
-		read(fd, ind_buffer_2, sizeof(*ind_buffer_2));
-
-		for(unsigned int i = 0; i < 256; ++i){
-
-			lseek(fd, BLOCK_OFFSET(ind_buffer_2[i * 4]), SEEK_SET);
-			read(fd, buffer, sizeof(*buffer));
-			
-			// Perform jpg check
-			if (buffer[0] == (char)0xff &&
-				buffer[1] == (char)0xd8 &&
-				buffer[2] == (char)0xff &&
-				(buffer[3] == (char)0xe0 ||
-				buffer[3] == (char)0xe1 ||
-				buffer[3] == (char)0xe8)) {
-					is_jpg = 1;
-			}
-			is_jpg=is_jpg;
-		}
-		// printf("----------------------\n");
-		// printf("------is_jpeg: %d------\n", is_jpg);
-		// printf("----------------------\n");
+	for (unsigned int i = 0; i < 256; ++i){
+		handle_s_in_direct_blocks(sec_ind_buffer[i], size, fd, file_i);//is_jpg, isReg, fd, dir_name);
 	}
 }
 
@@ -167,7 +143,6 @@ int main(int argc, char **argv) {
 					if(num_blocks > 0){
 						handle_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
 					} else{
-						// foobar = bytes_left;
 						handle_direct_blocks((int) inode->i_block[i], bytes_left, fd, file_i);
 					}
 				}
@@ -181,7 +156,10 @@ int main(int argc, char **argv) {
 				}                             
 				else if (i == EXT2_DIND_BLOCK){                             /* double indirect block */
 					printf("Double   : %u\n", inode->i_block[i]);
-					handle_d_in_direct_blocks(inode, is_jpg, isReg, i, fd);
+					if(num_blocks > 0)
+						handle_d_in_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
+					else
+						handle_d_in_direct_blocks((int) inode->i_block[i], bytes_left, fd, file_i);
 				}
 				else if (i == EXT2_TIND_BLOCK){                            	/* triple indirect block */
 					printf("Triple   : %u\n", inode->i_block[i]);
