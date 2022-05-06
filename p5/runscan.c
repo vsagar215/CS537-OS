@@ -5,15 +5,23 @@
 #include <dirent.h>
 #include <string.h>
 
+// Track inode number
+int inode_num = -999;
+
 void handle_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i, int fd, char dir_name[537]) {
-	int idx = i;
-	// maintain local buffer
+
+	// Returning if empty block or a dir
 	char buffer[1024];
+	char inode_name[537];
+	// char file_name[537];
+
 	if(inode->i_block[i] == 0 || isReg != 1) return; 
 
-	lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
+	// Seeking to the correct data block
+	lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET); // TODO: Fix for only size of file, not entire block
 	read(fd, buffer, 1024);
 
+	// Checking if first block has JPG magic numbers
 	if (buffer[0] == (char)0xff &&
 	buffer[1] == (char)0xd8 &&
 	buffer[2] == (char)0xff &&
@@ -23,27 +31,31 @@ void handle_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i
 		is_jpg = 1;
 	}
 
+	// If the file is not a JPG
 	if(is_jpg != 1) return;
-	printf("i: %d\n", i);
-	printf("idx: %d\n", idx);
-	// write 
+	
+	// // ---- DEBUG OUTPUT ---- 
 	// printf("----------------------\n");
 	// printf("------is_jpeg: %d------\n", is_jpg);
 	// printf("----------------------\n");
 	// lseek(fd, BLOCK_OFFSET(inode->i_block[i]), SEEK_SET);
 	// figure out how to write to file
 	// char *file_name = "file-\0";
+	// // ---- DEBUG OUTPUT ---- 
 	
-	char file_name[537];
-	sprintf(file_name, "%s/%s%d%s", dir_name, "file-", i, ".jpg");
-	printf("----------\n");
-	printf("file_name: %s\n", file_name);
-	int file = open(file_name, O_CREAT, 0666);
-	write(file, buffer, sizeof(buffer));
-	close(file);
+	sprintf(inode_name, "%s/%s%d%s", dir_name, "file-", inode_num, ".jpg"); 
+	// sprintf(file_name, "%s/%s", dir_name, "a.jpg"); // TODO: Remove hard coding and retrieve filename
+	int file_i = open(inode_name, O_CREAT, 0666); // TODO: Assert fp is not null??
+	// int file_n = open(file_name, O_CREAT, 0666);
+	// TODO: Check why file empty
+	write(file_i, buffer, sizeof(buffer)); 
+	// write(file_n, buffer, sizeof(buffer));
+	close(file_i);
+	// close(file_n);
 
-	// TODO: Write to directory??
+	// printf("size of inode: %d\n", inode->i_size);
 }
+
 /*
 	enter the indirection
 	iterate through indirection until null (offset by 4)
@@ -51,6 +63,8 @@ void handle_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i
 
 	do the jpg check
 */
+
+// Call back direct block from within indirection
 void handle_s_in_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, int i, int fd, int dir_fd) {
 	char buffer[1024];
 	if(inode->i_block[i] == 0) return;// || isReg != 1) return; 
@@ -58,7 +72,6 @@ void handle_s_in_direct_blocks(struct ext2_inode *inode, int is_jpg, int isReg, 
 	
 	dir_fd=dir_fd;
 	isReg=isReg;
-	
 	
 	int ind_buffer[256]; // buffer ind block as an int
 	
@@ -161,7 +174,9 @@ int main(int argc, char **argv) {
 	//iterate the first inode block
 	off_t start_inode_table = locate_inode_table(0, &group);
 	printf("DEBUG inodes per block: %d\n", inodes_per_block);
+	inode_num = -1;
     for (unsigned int i = 0; i < 15; i++) { // TODO: num_groups * inodes_per_group
+			inode_num++;
 			printf("inode %u: \n", i);
             struct ext2_inode *inode = malloc(sizeof(struct ext2_inode));
 			int isReg= -1;
@@ -181,7 +196,7 @@ int main(int argc, char **argv) {
              printf("Is directory? %s \n Is Regular file? %s\n",
                 isDir ? "true" : "false",
                 isReg ? "true" : "false");
-// while loop to read data from i_size to find num of data blocks
+// TODO: while loop to read data from i_size to find num of data blocks??
 			// print i_block numberss
 			for(unsigned int i=0; i<EXT2_N_BLOCKS; i++)
 			{
