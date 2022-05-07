@@ -57,61 +57,6 @@ int main(int argc, char **argv) {
 		// printf("DEBUG inodes per block: %d\n", inodes_per_block);
 		inode_num = -1;
 		for (unsigned int i = 0; i < inodes_per_group; i++) {
-			inode_num++;
-			struct ext2_inode *inode = malloc(sizeof(struct ext2_inode));
-			int isReg= -1;
-			int isDir= -1;
-			read_inode(fd, j, start_inode_table, i, inode);
-			
-			isReg = S_ISREG(inode->i_mode) ?1 :0;
-			isDir = S_ISDIR(inode->i_mode) ?1 :0;
-
-			if(isDir ) continue;
-			if(!isReg) continue;
-
-
-			int is_jpg = 0;
-			char jpg_buffer[1024];
-			// char inode_name[1024];
-
-			// Read first block
-			lseek(fd, BLOCK_OFFSET(inode->i_block[0]), SEEK_SET);
-			read(fd, jpg_buffer, 1024);
-			
-			// Checking if first block has JPG magic numbers
-			if (jpg_buffer[0] == (char)0xff &&
-			jpg_buffer[1] == (char)0xd8 &&
-			jpg_buffer[2] == (char)0xff &&
-			(jpg_buffer[3] == (char)0xe0 ||
-			jpg_buffer[3] == (char)0xe1 ||
-			jpg_buffer[3] == (char)0xe8)) {
-				is_jpg = 1;
-			}
-
-			if(is_jpg != 1) continue;
-
-			//get the inode number & add into valid_inode array
-			valid_inodes[0] = valid_inodes[0] + 1;
-			valid_inodes[valid_inodes[0]] = inode_num;
-			// valid_inodes[0] = valid_inodes[0] + 1;
-			int i;
-			for(i = 1; i < valid_inodes[0] + 1; ++i) valid_inodes[i] = inode_num;
-
-		}
-	}
-	// resetting inodenum here
-	inode_num = 0;
-	for (unsigned int j = 0; j < num_groups; j++) {
-		// example read first the super-block and group-descriptor
-		read_super_block(fd, j, &super);
-		read_group_desc(fd, j, &group);
-		
-		// printf("There are %u inodes in an inode table block and %u blocks in the idnode table\n", inodes_per_block, itable_blocks);
-		//iterate the first inode block
-		off_t start_inode_table = locate_inode_table(j, &group);
-		// printf("DEBUG inodes per block: %d\n", inodes_per_block);
-		inode_num = -1;
-		for (unsigned int i = 0; i < inodes_per_group; i++) {
 
 			inode_num++;
 			// printf("inode %u: \n", i);
@@ -163,6 +108,8 @@ int main(int argc, char **argv) {
 			sprintf(inode_name, "%s/%s%d%s", dir_name, "file-", inode_num, ".jpg");
 			int file_i = open(inode_name, O_CREAT | O_TRUNC | O_WRONLY, 0666); // TODO: Assert fp is not null?
 			// Add to array -- BEN MOVED!!
+			valid_inodes[0] = valid_inodes[0] + 1;
+			valid_inodes[valid_inodes[0]] = inode_num;
 			
 
 			// how many blocks to read
@@ -327,7 +274,7 @@ void handle_d_in_direct_blocks(int block_addr, int size, int fd, int file_i) {
 }
 
 // TODO: Complete writing
-void write_inode(int jpg_inode, char file_name[1024], int inode_num){
+void write_inode_old(int jpg_inode, char file_name[1024], int inode_num){
 
 	/*
 		1) open the file of the inode num
@@ -370,6 +317,42 @@ void write_inode(int jpg_inode, char file_name[1024], int inode_num){
 		fputc(c, output_fd);
 		c = fgetc(inode_fd);
 	}
+}
+
+void write_inode(int jpg_inode, char file_name[1024], int inode_num){
+	// 1
+	printf("INODE NUM: %d\n", inode_num);
+	int inode_fd, output_fd;
+
+	// file to read
+	char inode_name[1024];
+	sprintf(inode_name, "%s/%s%d%s", dir_name, "file-", jpg_inode, ".jpg");
+
+	char inode_file_path[1024];
+	// file to write
+	sprintf(inode_file_path, "%s/%s", dir_name, file_name);
+
+	inode_fd = open(inode_name, O_RDWR, 0666);
+	if(inode_fd == -1) {
+		printf("inode file path wrong %s\n", inode_name);
+		return;
+		// exit(1);
+	}
+	// int m_size = 5000;
+	// char buffer[m_size];
+
+	char *buffer = malloc(sizeof(char) * 100000000);
+
+	size_t f_size = read(inode_fd, buffer, 100000000);
+	printf("f size: %ld\n", f_size);
+	output_fd = open(inode_file_path,  O_CREAT | O_TRUNC | O_WRONLY, 0666);
+	if(output_fd == -1) {
+		printf("output file path wrong %s\n", file_name);
+		return;
+		// exit(1);
+	}
+	write(output_fd, buffer, f_size);
+	free(buffer);
 }
 
 void handle_dir(struct ext2_inode *inode, int fd) {
