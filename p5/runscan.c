@@ -7,20 +7,45 @@
 
 // Track inode number
 int inode_num = -999;
+int bytes_count = -999;
+int entered = 0;
+int bytes_left_g;
 // int foobar = 0;
 
+// dec total bytes by byte
 void handle_direct_blocks(int block_addr, int size, int fd, int file_i) {
-
+	
 	char buffer[1024];
 	// Returning if empty block
 	if(block_addr == 0) return;
 	
-	// Seeking to the correct data block
 	lseek(fd, BLOCK_OFFSET(block_addr), SEEK_SET);
 	read(fd, buffer, size);
 	write(file_i, buffer, size);
+	// bytes_count -= size;
+
+	// if(bytes_count<1024) 
+	// 	bytes_count=bytes_count;
+	// else
+	// 	bytes_count -= size;
+
+	// if(bytes_count < 1024){
+	// 	bytes_count -= bytes_count ;
+	// 	// Seeking to the correct data block
+	// 	lseek(fd, BLOCK_OFFSET(block_addr), SEEK_SET);
+	// 	read(fd, buffer, bytes_count);
+	// 	write(file_i, buffer, bytes_count);
+	// }
+	// else {
+	// 	bytes_count -= size;
+	// // Seeking to the correct data block
+	// lseek(fd, BLOCK_OFFSET(block_addr), SEEK_SET);
+	// read(fd, buffer, size);
+	// write(file_i, buffer, size);
+	// }
 }
 
+// dec total bytes by block(1024)
 // Call back direct block from within indirection
 void handle_s_in_direct_blocks(int block_addr, int size, int fd, int file_i){
 	
@@ -32,13 +57,26 @@ void handle_s_in_direct_blocks(int block_addr, int size, int fd, int file_i){
 
 	// Read pointers from indirect block
 	for (unsigned int i = 0; i < 256; ++i){
-		handle_direct_blocks(ind_buffer[i], size, fd, file_i);
+		if(bytes_count <= 1024){
+			// entered++;
+			handle_direct_blocks(ind_buffer[i], bytes_left_g, fd, file_i);
+			// bytes_count -= bytes_left_g;
+		} else{
+
+		//check if bytes count is less than 1024
+		// then call direct on bytes_count
+		// else direct on size
+			// entered++;
+			handle_direct_blocks(ind_buffer[i], size, fd, file_i);
+			bytes_count -= 1024;
+		}
 	}
 }
 
+// dec total bytes by indirect block (1024*256)
 // TODO: Rewrite to call single indirect block handler
 void handle_d_in_direct_blocks(int block_addr, int size, int fd, int file_i) {
-	
+	// size=size; file_i=file_i;
 	int sec_ind_buffer[256]; // buffer ind block as an int
 	
 	// Read indirect block
@@ -47,8 +85,16 @@ void handle_d_in_direct_blocks(int block_addr, int size, int fd, int file_i) {
 
 	// Read pointers from indirect block
 	for (unsigned int i = 0; i < 256; ++i){
-		handle_s_in_direct_blocks(sec_ind_buffer[i], size, fd, file_i);//is_jpg, isReg, fd, dir_name);
-	}
+
+		if(bytes_count <= 1024){
+			// entered++;
+			handle_s_in_direct_blocks(sec_ind_buffer[i], bytes_left_g, fd, file_i);
+			// bytes_count -= bytes_left_g;
+		} else{
+			handle_s_in_direct_blocks(sec_ind_buffer[i], size, fd, file_i);
+			// bytes_count -= 1024*256;
+		}
+	} //262144, 12288
 }
 
 int main(int argc, char **argv) {
@@ -132,45 +178,56 @@ int main(int argc, char **argv) {
 			int file_i = open(inode_name, O_CREAT | O_TRUNC | O_WRONLY, 0666); // TODO: Assert fp is not null?
 			
 			// how many blocks to read
-			int num_blocks = inode->i_size / 1024;
 			int bytes_left = inode->i_size % 1024;
-			int total_bytes = inode->i_size; total_bytes=total_bytes;
+			bytes_left_g = bytes_left;
+			bytes_count = inode->i_size;
 			
 			for(unsigned int i=0; i<EXT2_N_BLOCKS; i++)
 			{
+				if(bytes_count <= 0) break;
 				// TODO: LATER Check if file spans just direct or direct and indirect blocks 
-				if (i < EXT2_NDIR_BLOCKS) {                                 /* direct blocks */
+				if (i < EXT2_NDIR_BLOCKS) {
+					int consumed;
 					printf("Block %2u : %u\n", i, inode->i_block[i]);				
-					if(num_blocks > 0){
-						handle_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
+					if(bytes_count > 1024){
+						consumed = 1024;
+						handle_direct_blocks((int) inode->i_block[i], consumed, fd, file_i);
 					} else{
-						handle_direct_blocks((int) inode->i_block[i], bytes_left, fd, file_i);
+						entered++;
+						consumed = bytes_left;
+						handle_direct_blocks((int) inode->i_block[i], consumed, fd, file_i);
 					}
+					bytes_count -= consumed;
 				}
 				else if (i == EXT2_IND_BLOCK){
 					printf("Single   : %u size: %d\n", inode->i_block[i], inode->i_size); 			/* single indirect block */
-					if(num_blocks > 0)
+					if(bytes_count > 1024){
 						handle_s_in_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
-					else
+					}else{
+						entered++;
 						handle_s_in_direct_blocks((int) inode->i_block[i], bytes_left, fd, file_i);
-				num_blocks--;
+					}
 				}                             
 				else if (i == EXT2_DIND_BLOCK){                             /* double indirect block */
 					printf("Double   : %u\n", inode->i_block[i]);
-					if(num_blocks > 0)
+					if(bytes_count > 1024)
 						handle_d_in_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
-					else
+					else{
+						entered++;
 						handle_d_in_direct_blocks((int) inode->i_block[i], bytes_left, fd, file_i);
+					}
 				}
 				else if (i == EXT2_TIND_BLOCK){                            	/* triple indirect block */
 					printf("Triple   : %u\n", inode->i_block[i]);
 				}
-				num_blocks--;
 			}
 			close(file_i); // TODO: Move it
 			free(inode);
 		}
 	}
 	close(fd);
-	// printf("Bytes Left: %d\n", foobar);
+	printf("----------------------------PRINTS----------------------------\n");
+	printf("Entered count: %d\n", entered);
+	printf("Bytes Count: %d\nBytes Left: %d\n", bytes_count, bytes_left_g);
+	printf("------------------------END OF PRINTS-------------------------\n");
 }
