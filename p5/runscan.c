@@ -45,20 +45,76 @@ int main(int argc, char **argv) {
 
 	struct ext2_super_block super;
 	struct ext2_group_desc group;
+
 	for (unsigned int j = 0; j < num_groups; j++) {
 		// example read first the super-block and group-descriptor
 		read_super_block(fd, j, &super);
 		read_group_desc(fd, j, &group);
 		
-		printf("There are %u inodes in an inode table block and %u blocks in the idnode table\n", inodes_per_block, itable_blocks);
+		// printf("There are %u inodes in an inode table block and %u blocks in the idnode table\n", inodes_per_block, itable_blocks);
 		//iterate the first inode block
 		off_t start_inode_table = locate_inode_table(j, &group);
-		printf("DEBUG inodes per block: %d\n", inodes_per_block);
+		// printf("DEBUG inodes per block: %d\n", inodes_per_block);
+		inode_num = -1;
+		for (unsigned int i = 0; i < inodes_per_group; i++) {
+			inode_num++;
+			struct ext2_inode *inode = malloc(sizeof(struct ext2_inode));
+			int isReg= -1;
+			int isDir= -1;
+			read_inode(fd, j, start_inode_table, i, inode);
+			
+			isReg = S_ISREG(inode->i_mode) ?1 :0;
+			isDir = S_ISDIR(inode->i_mode) ?1 :0;
+
+			if(isDir ) continue;
+			if(!isReg) continue;
+
+
+			int is_jpg = 0;
+			char jpg_buffer[1024];
+			// char inode_name[1024];
+
+			// Read first block
+			lseek(fd, BLOCK_OFFSET(inode->i_block[0]), SEEK_SET);
+			read(fd, jpg_buffer, 1024);
+			
+			// Checking if first block has JPG magic numbers
+			if (jpg_buffer[0] == (char)0xff &&
+			jpg_buffer[1] == (char)0xd8 &&
+			jpg_buffer[2] == (char)0xff &&
+			(jpg_buffer[3] == (char)0xe0 ||
+			jpg_buffer[3] == (char)0xe1 ||
+			jpg_buffer[3] == (char)0xe8)) {
+				is_jpg = 1;
+			}
+
+			if(is_jpg != 1) continue;
+
+			//get the inode number & add into valid_inode array
+			valid_inodes[0] = valid_inodes[0] + 1;
+			valid_inodes[valid_inodes[0]] = inode_num;
+			// valid_inodes[0] = valid_inodes[0] + 1;
+			int i;
+			for(i = 1; i < valid_inodes[0] + 1; ++i) valid_inodes[i] = inode_num;
+
+		}
+	}
+	// resetting inodenum here
+	inode_num = 0;
+	for (unsigned int j = 0; j < num_groups; j++) {
+		// example read first the super-block and group-descriptor
+		read_super_block(fd, j, &super);
+		read_group_desc(fd, j, &group);
+		
+		// printf("There are %u inodes in an inode table block and %u blocks in the idnode table\n", inodes_per_block, itable_blocks);
+		//iterate the first inode block
+		off_t start_inode_table = locate_inode_table(j, &group);
+		// printf("DEBUG inodes per block: %d\n", inodes_per_block);
 		inode_num = -1;
 		for (unsigned int i = 0; i < inodes_per_group; i++) {
 
 			inode_num++;
-			printf("inode %u: \n", i);
+			// printf("inode %u: \n", i);
 			struct ext2_inode *inode = malloc(sizeof(struct ext2_inode));
 			int isReg= -1;
 			int isDir= -1;
@@ -68,17 +124,18 @@ int main(int argc, char **argv) {
 			* https://www.nongnu.org/ext2-doc/ext2.html#i-blocks
 			*/
 			unsigned int i_blocks = inode->i_blocks/(2<<super.s_log_block_size);
+			i_blocks = i_blocks;
+			isReg = isReg;
 			
 			isReg = S_ISREG(inode->i_mode) ?1 :0;
 			isDir = S_ISDIR(inode->i_mode) ?1 :0;
 
-			printf("number of blocks %u\n", i_blocks);
-			printf("Is directory? %s \n Is Regular file? %s\n",
-				isDir ? "true" : "false",
-				isReg ? "true" : "false");
-			
+			// printf("number of blocks %u\n", i_blocks);
+			// printf("Is directory? %s \n Is Regular file? %s\n",
+			// 	isDir ? "true" : "false",
+			// 	isReg ? "true" : "false");
 			if(isDir == 1) {
-				handle_dir(inode, fd); // loop twice: 1) loop for files 2) loop for dirs
+				// handle_dir(inode, fd); // loop twice: 1) loop for files 2) loop for dirs
 				continue; // MAYBE here?
 			}
 
@@ -105,10 +162,8 @@ int main(int argc, char **argv) {
 			// Create and open file
 			sprintf(inode_name, "%s/%s%d%s", dir_name, "file-", inode_num, ".jpg");
 			int file_i = open(inode_name, O_CREAT | O_TRUNC | O_WRONLY, 0666); // TODO: Assert fp is not null?
-			// Add to array
-			valid_inodes[0] = valid_inodes[0] + 1;
-			int i;
-			for(i = 1; i < valid_inodes[0] + 1; ++i) valid_inodes[i] = inode_num;
+			// Add to array -- BEN MOVED!!
+			
 
 			// how many blocks to read
 			int final_block_bytes = inode->i_size % 1024;
@@ -121,7 +176,7 @@ int main(int argc, char **argv) {
 				// TODO: LATER Check if file spans just direct or direct and indirect blocks 
 				if (i < EXT2_NDIR_BLOCKS) {
 					int consumed;
-					printf("Block %2u : %u\n", i, inode->i_block[i]);				
+					// printf("Block %2u : %u\n", i, inode->i_block[i]);				
 					if(bytes_count > 1024){
 						consumed = 1024;
 						handle_direct_blocks((int) inode->i_block[i], consumed, fd, file_i);
@@ -133,7 +188,7 @@ int main(int argc, char **argv) {
 					bytes_count -= consumed;
 				}
 				else if (i == EXT2_IND_BLOCK){
-					printf("Single   : %u size: %d\n", inode->i_block[i], inode->i_size); 			/* single indirect block */
+					// printf("Single   : %u size: %d\n", inode->i_block[i], inode->i_size); 			/* single indirect block */
 					if(bytes_count > 1024){
 						handle_s_in_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
 					}else{
@@ -142,7 +197,7 @@ int main(int argc, char **argv) {
 					}
 				}                             
 				else if (i == EXT2_DIND_BLOCK){                             /* double indirect block */
-					printf("Double   : %u\n", inode->i_block[i]);
+					// printf("Double   : %u\n", inode->i_block[i]);
 					if(bytes_count > 1024)
 						handle_d_in_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
 					else{
@@ -151,13 +206,53 @@ int main(int argc, char **argv) {
 					}
 				}
 				else if (i == EXT2_TIND_BLOCK){                            	/* triple indirect block */
-					printf("Triple   : %u\n", inode->i_block[i]);
+					// printf("Triple   : %u\n", inode->i_block[i]);
 				}
 			}
 			close(file_i); // TODO: Move it
 			free(inode);
 		}
 	}
+
+		// resetting inodenum here
+	inode_num = 0;
+	for (unsigned int j = 0; j < num_groups; j++) {
+		// example read first the super-block and group-descriptor
+		read_super_block(fd, j, &super);
+		read_group_desc(fd, j, &group);
+		
+		// printf("There are %u inodes in an inode table block and %u blocks in the idnode table\n", inodes_per_block, itable_blocks);
+		//iterate the first inode block
+		off_t start_inode_table = locate_inode_table(j, &group);
+		// printf("DEBUG inodes per block: %d\n", inodes_per_block);
+		inode_num = -1;
+		for (unsigned int i = 0; i < inodes_per_group; i++) {
+
+			inode_num++;
+			// printf("inode %u: \n", i);
+			struct ext2_inode *inode = malloc(sizeof(struct ext2_inode));
+			int isReg= -1;
+			int isDir= -1;
+			read_inode(fd, j, start_inode_table, i, inode);
+			/* the maximum index of the i_block array should be computed from i_blocks / ((1024<<s_log_block_size)/512)
+			* or once simplified, i_blocks/(2<<s_log_block_size)
+			* https://www.nongnu.org/ext2-doc/ext2.html#i-blocks
+			*/
+			unsigned int i_blocks = inode->i_blocks/(2<<super.s_log_block_size);
+			i_blocks = i_blocks;
+			isReg = isReg;
+			
+			isReg = S_ISREG(inode->i_mode) ?1 :0;
+			isDir = S_ISDIR(inode->i_mode) ?1 :0;
+
+			if(isDir == 1) {
+				handle_dir(inode, fd); // loop twice: 1) loop for files 2) loop for dirs
+				continue; // MAYBE here?
+			}
+		}
+	}
+
+
 	close(fd);
 	printf("----------------------------PRINTS----------------------------\n");
 	printf("Entered count: %d\n", entered);
@@ -165,7 +260,7 @@ int main(int argc, char **argv) {
 	printf("Bytes Count: %d\nBytes Left: %d\n", bytes_count, final_block_bytes_g);
 	int i;
 	for(i = 0; i < valid_inodes[0] + 1; ++i) printf("%d\t", valid_inodes[i]);
-	for(i = 0; i < counter + 1; ++i) printf("%d\t", passed_nodes[i]);
+	// for(i = 0; i < counter + 1; ++i) printf("%d\t", passed_nodes[i]);
 	printf("\n------------------------END OF PRINTS-------------------------\n");
 }
 
@@ -232,7 +327,7 @@ void handle_d_in_direct_blocks(int block_addr, int size, int fd, int file_i) {
 }
 
 // TODO: Complete writing
-void write_inode(int jpg_inode, char file_name[1024]){
+void write_inode(int jpg_inode, char file_name[1024], int inode_num){
 
 	/*
 		1) open the file of the inode num
@@ -241,6 +336,7 @@ void write_inode(int jpg_inode, char file_name[1024]){
 	*/
 
 	// 1
+	printf("INODE NUM: %d\n", inode_num);
 	FILE *inode_fd, *output_fd;
 
 	// file to read
@@ -249,23 +345,28 @@ void write_inode(int jpg_inode, char file_name[1024]){
 
 	char inode_file_path[1024], c;
 	// file to write
-	sprintf(inode_file_path, "%s/%s%s", dir_name, file_name, ".jpg");
+	sprintf(inode_file_path, "%s/%s", dir_name, file_name);
 
 	inode_fd = fopen(inode_name, "r");
 	if(inode_fd == NULL) {
-		printf("inode file path wrong\n");
-		exit(1);
+		printf("inode file path wrong %s\n", inode_name);
+		return;
+		// exit(1);
 	}
 	
-	output_fd = fopen(inode_file_path, "w");
+	output_fd = fopen(inode_file_path, "w+");
 	if(output_fd == NULL) {
-		printf("output file path wrong\n");
-		exit(1);
+		printf("output file path wrong %s\n", file_name);
+		return;
+		// exit(1);
 	}
 
 
 	c = fgetc(inode_fd);
+	printf("inode fd: %d\n", inode_fd->_fileno);
+	printf("C: %d\n", c==EOF);
 	while(c != EOF) {
+		printf("C: %c\n", c);
 		fputc(c, output_fd);
 		c = fgetc(inode_fd);
 	}
@@ -284,6 +385,8 @@ void handle_dir(struct ext2_inode *inode, int fd) {
         struct ext2_dir_entry* dentry = (struct ext2_dir_entry*) & ( buffer[curr_offset] );
         int dir_inode_num = dentry->inode;
 
+
+
 		if(dentry->inode == 0) {
             // curr_offset += 8+(dentry->name_len + (4-(dentry->name_len %4)) );
             // continue; // break, not continue
@@ -291,17 +394,24 @@ void handle_dir(struct ext2_inode *inode, int fd) {
         }
 
 		//check if inode is in valid array
-		for(int i = 1; i < valid_inodes[0]; i ++){
+		// for(int i = 0; i < valid_inodes[0] + 1; ++i) printf("%d\t", valid_inodes[i]);
+		for(int i = 1; i < valid_inodes[0]+1; i ++){
+			printf("dir: %d\n", dir_inode_num);
+
 			if(dir_inode_num == valid_inodes[i]) {
 				valid = 1;
 				break;
 			}
 		}
 
+		printf("dir: %d\n", dir_inode_num);
+		printf("val: %d\n", valid);
 		if(!valid) {
 			curr_offset += 8+(dentry->name_len + (4-(dentry->name_len %4)) );
             continue;
 		}
+		// else
+		// 	return;
 
 		// passed_nodes[counter] = dir_inode_num;
 		// counter++;
@@ -321,7 +431,7 @@ void handle_dir(struct ext2_inode *inode, int fd) {
         // read_inode(fd, ngroup, offset, inode_num, inode);
 		// TODO: Stubbing filepath
 
-        // write_inode(dir_inode_num, name);
+        write_inode(dir_inode_num, name, dir_inode_num);
  
         //dir entry debug info
         printf("Entry name is --%s--\n", name);
@@ -335,7 +445,7 @@ void handle_dir(struct ext2_inode *inode, int fd) {
 
 
         curr_offset += dentry->name_len%4 == 0? 8+dentry->name_len : 8+(dentry->name_len + (4-(dentry->name_len %4)) );
-        // printf("after curr_offset: %d\n\n", curr_offset);
+        printf("after curr_offset: %d\n\n", curr_offset);
 
 
 
@@ -343,6 +453,6 @@ void handle_dir(struct ext2_inode *inode, int fd) {
         if(curr_offset >= max_offset) break;
     }
 
-	   printf("--------------------------- FIN -------------------------------\n");
+	printf("--------------------------- FIN -------------------------------\n");
 
 }
