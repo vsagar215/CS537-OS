@@ -9,7 +9,7 @@
 int inode_num = -999;
 int bytes_count = -999;
 int entered = 0;
-int bytes_left_g;
+int final_block_bytes_g;
 // int foobar = 0;
 
 // dec total bytes by byte
@@ -22,27 +22,6 @@ void handle_direct_blocks(int block_addr, int size, int fd, int file_i) {
 	lseek(fd, BLOCK_OFFSET(block_addr), SEEK_SET);
 	read(fd, buffer, size);
 	write(file_i, buffer, size);
-	// bytes_count -= size;
-
-	// if(bytes_count<1024) 
-	// 	bytes_count=bytes_count;
-	// else
-	// 	bytes_count -= size;
-
-	// if(bytes_count < 1024){
-	// 	bytes_count -= bytes_count ;
-	// 	// Seeking to the correct data block
-	// 	lseek(fd, BLOCK_OFFSET(block_addr), SEEK_SET);
-	// 	read(fd, buffer, bytes_count);
-	// 	write(file_i, buffer, bytes_count);
-	// }
-	// else {
-	// 	bytes_count -= size;
-	// // Seeking to the correct data block
-	// lseek(fd, BLOCK_OFFSET(block_addr), SEEK_SET);
-	// read(fd, buffer, size);
-	// write(file_i, buffer, size);
-	// }
 }
 
 // dec total bytes by block(1024)
@@ -59,7 +38,7 @@ void handle_s_in_direct_blocks(int block_addr, int size, int fd, int file_i){
 	for (unsigned int i = 0; i < 256; ++i){
 		if(bytes_count <= 1024){
 			// entered++;
-			handle_direct_blocks(ind_buffer[i], bytes_left_g, fd, file_i);
+			handle_direct_blocks(ind_buffer[i], final_block_bytes_g, fd, file_i);
 			// bytes_count -= bytes_left_g;
 		} else{
 
@@ -73,10 +52,8 @@ void handle_s_in_direct_blocks(int block_addr, int size, int fd, int file_i){
 	}
 }
 
-// dec total bytes by indirect block (1024*256)
 // TODO: Rewrite to call single indirect block handler
 void handle_d_in_direct_blocks(int block_addr, int size, int fd, int file_i) {
-	// size=size; file_i=file_i;
 	int sec_ind_buffer[256]; // buffer ind block as an int
 	
 	// Read indirect block
@@ -88,13 +65,13 @@ void handle_d_in_direct_blocks(int block_addr, int size, int fd, int file_i) {
 
 		if(bytes_count <= 1024){
 			// entered++;
-			handle_s_in_direct_blocks(sec_ind_buffer[i], bytes_left_g, fd, file_i);
+			handle_s_in_direct_blocks(sec_ind_buffer[i], final_block_bytes_g, fd, file_i);
 			// bytes_count -= bytes_left_g;
 		} else{
 			handle_s_in_direct_blocks(sec_ind_buffer[i], size, fd, file_i);
 			// bytes_count -= 1024*256;
 		}
-	} //262144, 12288
+	} 
 }
 
 int main(int argc, char **argv) {
@@ -178,8 +155,8 @@ int main(int argc, char **argv) {
 			int file_i = open(inode_name, O_CREAT | O_TRUNC | O_WRONLY, 0666); // TODO: Assert fp is not null?
 			
 			// how many blocks to read
-			int bytes_left = inode->i_size % 1024;
-			bytes_left_g = bytes_left;
+			int final_block_bytes = inode->i_size % 1024;
+			final_block_bytes_g = final_block_bytes;
 			bytes_count = inode->i_size;
 			
 			for(unsigned int i=0; i<EXT2_N_BLOCKS; i++)
@@ -194,7 +171,7 @@ int main(int argc, char **argv) {
 						handle_direct_blocks((int) inode->i_block[i], consumed, fd, file_i);
 					} else{
 						entered++;
-						consumed = bytes_left;
+						consumed = final_block_bytes;
 						handle_direct_blocks((int) inode->i_block[i], consumed, fd, file_i);
 					}
 					bytes_count -= consumed;
@@ -205,7 +182,7 @@ int main(int argc, char **argv) {
 						handle_s_in_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
 					}else{
 						entered++;
-						handle_s_in_direct_blocks((int) inode->i_block[i], bytes_left, fd, file_i);
+						handle_s_in_direct_blocks((int) inode->i_block[i], final_block_bytes, fd, file_i);
 					}
 				}                             
 				else if (i == EXT2_DIND_BLOCK){                             /* double indirect block */
@@ -214,7 +191,7 @@ int main(int argc, char **argv) {
 						handle_d_in_direct_blocks((int) inode->i_block[i], 1024, fd, file_i);
 					else{
 						entered++;
-						handle_d_in_direct_blocks((int) inode->i_block[i], bytes_left, fd, file_i);
+						handle_d_in_direct_blocks((int) inode->i_block[i], final_block_bytes, fd, file_i);
 					}
 				}
 				else if (i == EXT2_TIND_BLOCK){                            	/* triple indirect block */
@@ -228,6 +205,6 @@ int main(int argc, char **argv) {
 	close(fd);
 	printf("----------------------------PRINTS----------------------------\n");
 	printf("Entered count: %d\n", entered);
-	printf("Bytes Count: %d\nBytes Left: %d\n", bytes_count, bytes_left_g);
+	printf("Bytes Count: %d\nBytes Left: %d\n", bytes_count, final_block_bytes_g);
 	printf("------------------------END OF PRINTS-------------------------\n");
 }
